@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * Carte du trajet retenu : fond Plan IGN (service public, sans compte), tracé, repères « Départ »
+ * Carte du trajet retenu : fond OpenStreetMap (libre, sans compte), tracé, repères « Départ »
  * et « Arrivée ». Déplaçable et zoomable aux doigts, au clavier (flèches, + et −) et par deux
  * boutons. Sans réseau, le fond de carte est indisponible : un message le dit. La liste des étapes,
  * affichée sous la carte, en reste l'alternative écrite. Décision : docs/adr/0006-carte-du-trajet.md.
  * Pendant le trajet, la carte peut suivre la position de la personne, comme un GPS : flèche « Vous »
  * tournée dans le sens de la marche, plein écran, bouton pour se recentrer, distance restante,
  * alerte si elle quitte le trajet. Décision : docs/adr/0008-guidage-sur-la-carte.md.
+ * Fond OpenStreetMap plutôt que Plan IGN : docs/adr/0009-fond-de-carte-openstreetmap.md.
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import Leaflet from 'leaflet'
@@ -18,10 +19,11 @@ import { avancementSurLeTrace, capEntre, distanceEntre } from '@/services/guidag
 
 const props = defineProps<{ trace: PointDuTrace[]; depart: Lieu; arrivee: Lieu; enLigne: boolean }>()
 
-/** Tuiles du Plan IGN (Géoplateforme, WMTS) : seule la zone affichée est demandée. */
-const FOND_PLAN_IGN =
-  'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2' +
-  '&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/png&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}'
+/** Tuiles OpenStreetMap (serveur de la fondation, sans compte) : seule la zone affichée est demandée. */
+const FOND_OPENSTREETMAP = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+/** Mention obligatoire de la licence OpenStreetMap (ODbL), avec un lien vers ses conditions. */
+const MENTION_OPENSTREETMAP =
+  'Fond de carte : © <a href="https://www.openstreetmap.org/copyright">les contributeurs d’OpenStreetMap</a>'
 
 const conteneurCarte = ref<HTMLElement | null>(null)
 const zoneCarte = ref<HTMLElement | null>(null)
@@ -62,8 +64,8 @@ function creerCarte(conteneur: HTMLElement): void {
     markerZoomAnimation: !sansAnimation,
     inertia: !sansAnimation,
   })
-  Leaflet.control.attribution({ prefix: false }).addAttribution('Fond de carte : © IGN').addTo(carte)
-  Leaflet.tileLayer(FOND_PLAN_IGN, { minZoom: 6, maxZoom: 18, tileSize: 256 }).addTo(carte)
+  Leaflet.control.attribution({ prefix: false }).addAttribution(MENTION_OPENSTREETMAP).addTo(carte)
+  Leaflet.tileLayer(FOND_OPENSTREETMAP, { minZoom: 6, maxZoom: 19, tileSize: 256 }).addTo(carte)
   const pointsDuTrace = props.trace.map((point) => Leaflet.latLng(point.latitude, point.longitude))
   const ligneDuTrajet = Leaflet.polyline(pointsDuTrace, { color: '#000091', weight: 5, interactive: false }).addTo(carte)
   const pointDeDepart = pointsDuTrace[0]!

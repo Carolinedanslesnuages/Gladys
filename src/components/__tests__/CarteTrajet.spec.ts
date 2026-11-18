@@ -98,6 +98,18 @@ describe('Carte du trajet', () => {
     ecran.unmount()
   })
 
+  it('Demande #26 : affiche le fond OpenStreetMap, avec la mention de ses contributeurs', () => {
+    const ecran = monter()
+    const tuiles = Array.from(document.querySelectorAll<HTMLImageElement>('img.leaflet-tile'))
+    expect(tuiles.length).toBeGreaterThan(0)
+    for (const tuile of tuiles) expect(tuile.src).toMatch(/^https:\/\/tile\.openstreetmap\.org\/10\/\d+\/\d+\.png$/)
+    const mention = ecran.find('.leaflet-control-attribution')
+    expect(mention.text()).toContain('© les contributeurs d’OpenStreetMap')
+    expect(mention.find('a').attributes('href')).toBe('https://www.openstreetmap.org/copyright')
+    expect(mention.find('a').attributes('target')).toBeUndefined()
+    ecran.unmount()
+  })
+
   it('les boutons « Zoomer » et « Dézoomer » changent le niveau de zoom', async () => {
     const ecran = monter()
     const zoomDeDepart = carteAffichee!.getZoom()
