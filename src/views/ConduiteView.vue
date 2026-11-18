@@ -204,6 +204,7 @@ onUnmounted(() => magasinConduite.arreter())
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-height: 100vh;
   min-height: 100dvh;
   padding-block: 0.5rem;
 }
@@ -273,10 +274,17 @@ onUnmounted(() => magasinConduite.arreter())
 .commande-voix p {
   margin: 0;
 }
+/* La carte occupe toute la place entre le bandeau et la ligne d'arrivée : pas de blanc. */
+.carte-conduite :deep(.carte-complete) {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  min-height: 0;
+}
 .carte-conduite {
   position: relative;
-  flex: 1;
-  min-height: 18rem;
+  flex: 1 1 0;
+  min-height: 14rem;
   border-radius: 1rem;
   overflow: hidden;
 }
