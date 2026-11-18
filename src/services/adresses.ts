@@ -5,6 +5,8 @@
  * avec `ErreurReseau`.
  */
 const SERVICE_ADRESSES = 'https://data.geopf.fr/geocodage'
+/** Découpage administratif (geo.api.gouv.fr) : le nom d'une commune à partir de son seul code (ADR 0005). */
+const SERVICE_COMMUNES = 'https://geo.api.gouv.fr/communes'
 const NOMBRE_DE_PROPOSITIONS = 5
 
 /** Un point de départ ou d'arrivée : ce qu'on affiche et où il se trouve. */
@@ -57,7 +59,14 @@ export async function lieuLePlusProche(latitude: number, longitude: number): Pro
 
 /** Nom d'une commune d'après son code officiel (INSEE), ou `null` si le service ne la connaît pas. */
 export async function nomDeCommune(codeCommune: string): Promise<string | null> {
-  const parametres = new URLSearchParams({ q: codeCommune, type: 'municipality', citycode: codeCommune, limit: '1' })
-  const communes = await interrogerBaseAdresse(`${SERVICE_ADRESSES}/search?${parametres}`)
-  return communes[0]?.libelle ?? null
+  let reponse: Response
+  try {
+    reponse = await fetch(`${SERVICE_COMMUNES}/${encodeURIComponent(codeCommune)}?fields=nom`)
+  } catch {
+    throw new ErreurReseau()
+  }
+  if (reponse.status === 404) return null
+  if (!reponse.ok) throw new ErreurReseau()
+  const commune = (await reponse.json()) as { nom?: string }
+  return commune.nom?.trim() || null
 }

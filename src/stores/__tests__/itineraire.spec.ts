@@ -13,8 +13,8 @@ const reponseIgn = (metres: number, departementaleMetres: number) =>
       portions: [
         {
           steps: [
-            { distance: metres - departementaleMetres, attributes: { name: { cpx_numero: '' } } },
-            { distance: departementaleMetres, attributes: { name: { cpx_numero: 'D12' } } },
+            { distance: metres - departementaleMetres, attributes: { cpx_numero: '' } },
+            { distance: departementaleMetres, attributes: { cpx_numero: 'D12' } },
           ],
         },
       ],

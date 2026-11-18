@@ -18,7 +18,7 @@ const reponseIgn = (etapes: { numero: string; metres: number }[]) =>
   new Response(
     JSON.stringify({
       distance: etapes.reduce((total, etape) => total + etape.metres, 0),
-      portions: [{ steps: etapes.map((etape) => ({ distance: etape.metres, attributes: { name: { cpx_numero: etape.numero } } })) }],
+      portions: [{ steps: etapes.map((etape) => ({ distance: etape.metres, attributes: { cpx_numero: etape.numero } })) }],
     }),
   )
 
@@ -73,9 +73,9 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
             portions: [
               {
                 steps: [
-                  { distance: 1000, attributes: { name: { cpx_numero: '' }, vitesse_moyenne_vl: '30' } },
-                  { distance: 1500, attributes: { name: { cpx_numero: '' }, vitesse_moyenne_vl: 80 } },
-                  { distance: 500, attributes: { name: { cpx_numero: '' } } },
+                  { distance: 1000, attributes: { cpx_numero: '', vitesse_moyenne_vl: '30' } },
+                  { distance: 1500, attributes: { cpx_numero: '', vitesse_moyenne_vl: 80 } },
+                  { distance: 500, attributes: { cpx_numero: '' } },
                 ],
               },
             ],
@@ -142,7 +142,7 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
         JSON.stringify({
           distance: 1000,
           geometry: { type: 'LineString', coordinates: coordonnees },
-          portions: [{ steps: [{ distance: 1000, attributes: { name: { cpx_numero: 'C1' } } }] }],
+          portions: [{ steps: [{ distance: 1000, attributes: { cpx_numero: 'C1' } }] }],
         }),
       )
 
@@ -183,7 +183,7 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
   describe('Story #5 : les étapes du trajet, dans l’ordre', () => {
     const troncon = (metres: number, codeCommune: string, numero: string, nomDeRue = '') => ({
       distance: metres,
-      attributes: { insee_commune_gauche: codeCommune, name: { cpx_numero: numero, nom_1_gauche: nomDeRue } },
+      attributes: { insee_commune_gauche: codeCommune, cpx_numero: numero, nom_1_gauche: nomDeRue },
     })
 
     it('Critère 1 : une étape par village et par route, dans l’ordre ; les tronçons qui se suivent sont réunis', () => {
@@ -218,22 +218,18 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
           }),
         )
       const reponseCommune = (nom: string | null) =>
-        new Response(
-          JSON.stringify({
-            features: nom ? [{ geometry: { coordinates: [4.87, 45.52] }, properties: { label: nom } }] : [],
-          }),
-        )
+        nom ? new Response(JSON.stringify({ nom, code: '38544' })) : new Response('{}', { status: 404 })
       fetchSimule.mockImplementation((adresse) => {
         if (adresse.includes('/navigation/')) return Promise.resolve(reponseItineraire())
-        const codeCommune = new URL(adresse).searchParams.get('citycode')
+        const codeCommune = new URL(adresse).pathname.split('/').pop()
         if (codeCommune === '38999') return Promise.reject(new TypeError('Failed to fetch'))
         // 38544 : Vienne ; 38001 : inconnue du service ; 38999 : pas de réponse.
         return Promise.resolve(reponseCommune(codeCommune === '38544' ? 'Vienne' : null))
       })
       const resultat = await calculerItineraire(lyon, vienne, 30)
-      const demandesDeCommunes = fetchSimule.mock.calls.map(([adresse]) => adresse).filter((adresse) => adresse.includes('/geocodage/'))
+      const demandesDeCommunes = fetchSimule.mock.calls.map(([adresse]) => adresse).filter((adresse) => adresse.includes('/communes/'))
       expect(demandesDeCommunes).toHaveLength(3)
-      expect(new URL(demandesDeCommunes[0]!).searchParams.get('type')).toBe('municipality')
+      expect(demandesDeCommunes[0]).toBe('https://geo.api.gouv.fr/communes/38544?fields=nom')
       expect(resultat.itineraire.etapes.map((etape) => etape.commune)).toEqual(['Vienne', null, null])
       expect(resultat.plusCourt).toBe(resultat.itineraire)
     })

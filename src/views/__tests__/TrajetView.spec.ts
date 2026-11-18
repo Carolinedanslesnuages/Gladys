@@ -222,8 +222,8 @@ describe('Écran « Préparer mon trajet »', () => {
           portions: [
             {
               steps: [
-                { distance: metres - departementaleMetres, attributes: { name: { cpx_numero: 'C3' } } },
-                { distance: departementaleMetres, attributes: { name: { cpx_numero: 'D502' } } },
+                { distance: metres - departementaleMetres, attributes: { cpx_numero: 'C3' } },
+                { distance: departementaleMetres, attributes: { cpx_numero: 'D502' } },
               ],
             },
           ],
@@ -341,8 +341,8 @@ describe('Écran « Préparer mon trajet »', () => {
           portions: [
             {
               steps: [
-                { distance: 15000, attributes: { name: { cpx_numero: 'C3' }, vitesse_moyenne_vl: 80 } },
-                { distance: 6000, attributes: { name: { cpx_numero: 'C4' }, vitesse_moyenne_vl: 30 } },
+                { distance: 15000, attributes: { cpx_numero: 'C3', vitesse_moyenne_vl: 80 } },
+                { distance: 6000, attributes: { cpx_numero: 'C4', vitesse_moyenne_vl: 30 } },
               ],
             },
           ],
@@ -425,7 +425,7 @@ describe('Écran « Préparer mon trajet »', () => {
       attributes: {
         insee_commune_gauche: codeCommune,
         vitesse_moyenne_vl: 80,
-        name: { cpx_numero: numero, nom_1_gauche: nomDeRue },
+        cpx_numero: numero, nom_1_gauche: nomDeRue,
       },
     })
     const reponseIgn = (troncons: ReturnType<typeof troncon>[]) =>
@@ -453,8 +453,8 @@ describe('Écran « Préparer mon trajet »', () => {
         if (adresse.includes('/navigation/')) {
           return Promise.resolve(adresse.includes('departementale') ? parLesVillages() : plusCourt())
         }
-        const nom = nomsDesCommunes[new URL(adresse).searchParams.get('citycode') ?? '']
-        return Promise.resolve(reponseBaseAdresse(nom ? [nom] : []))
+        const nom = nomsDesCommunes[new URL(adresse).pathname.split('/').pop() ?? '']
+        return Promise.resolve(nom ? new Response(JSON.stringify({ nom })) : new Response('{}', { status: 404 }))
       })
       await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
       await flushPromises()
@@ -527,7 +527,7 @@ describe('Écran « Préparer mon trajet »', () => {
         JSON.stringify({
           distance: 12500,
           geometry: { type: 'LineString', coordinates: coordonnees },
-          portions: [{ steps: [{ distance: 12500, attributes: { name: { cpx_numero: 'C3' } } }] }],
+          portions: [{ steps: [{ distance: 12500, attributes: { cpx_numero: 'C3' } }] }],
         }),
       )
     const traceRetenu = [

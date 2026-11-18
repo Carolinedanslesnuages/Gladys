@@ -55,7 +55,9 @@ export interface PointDuTrace {
 }
 
 interface AttributsDuTroncon {
-  name?: { cpx_numero?: string; nom_1_gauche?: string; cpx_toponyme_route_nommee?: string }
+  cpx_numero?: string
+  nom_1_gauche?: string
+  cpx_toponyme_route_nommee?: string
   vitesse_moyenne_vl?: number | string
   insee_commune_gauche?: string
 }
@@ -91,9 +93,9 @@ export const estDepartementale = (numeroDeRoute: string | undefined) => /^R?D\s?
 
 /** Le numéro de la route (« D12 »), sinon le nom de la rue, sinon « Route sans nom ». */
 const nomDeLaRoute = (attributs: AttributsDuTroncon | undefined): string =>
-  attributs?.name?.cpx_numero?.trim() ||
-  attributs?.name?.nom_1_gauche?.trim() ||
-  attributs?.name?.cpx_toponyme_route_nommee?.trim() ||
+  attributs?.cpx_numero?.trim() ||
+  attributs?.nom_1_gauche?.trim() ||
+  attributs?.cpx_toponyme_route_nommee?.trim() ||
   ROUTE_SANS_NOM
 
 /** Regroupe, dans l'ordre du trajet, les tronçons qui se suivent sur la même route et dans la même commune. */
@@ -111,7 +113,7 @@ export function regrouperEnEtapes(troncons: TronconRecu[]): Etape[] {
       codeCommune,
       commune: null,
       route,
-      departementale: estDepartementale(troncon.attributes?.name?.cpx_numero),
+      departementale: estDepartementale(troncon.attributes?.cpx_numero),
       distanceMetres: troncon.distance,
     })
   }
@@ -119,8 +121,8 @@ export function regrouperEnEtapes(troncons: TronconRecu[]): Etape[] {
 }
 
 /**
- * Donne à chaque étape le nom de son village : une demande par commune au service public des
- * adresses, qui ne reçoit que le code de la commune. Un nom introuvable reste `null`, sans erreur.
+ * Donne à chaque étape le nom de son village : une demande par commune au service public du
+ * découpage administratif, qui ne reçoit que le code de la commune. Un nom introuvable reste `null`, sans erreur.
  */
 export async function nommerLesVillages(etapes: Etape[]): Promise<Etape[]> {
   const codesDesCommunes = [...new Set(etapes.flatMap((etape) => (etape.codeCommune ? [etape.codeCommune] : [])))]
@@ -159,7 +161,7 @@ async function demanderItineraire(depart: Lieu, arrivee: Lieu, contraintes: stri
   return {
     distanceMetres: resultat.distance,
     departementaleMetres: etapes
-      .filter((etape) => estDepartementale(etape.attributes?.name?.cpx_numero))
+      .filter((etape) => estDepartementale(etape.attributes?.cpx_numero))
       .reduce((total, etape) => total + etape.distance, 0),
     troncons: etapes.map((etape) => ({
       distanceMetres: etape.distance,
