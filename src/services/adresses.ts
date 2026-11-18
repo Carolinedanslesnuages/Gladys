@@ -57,6 +57,20 @@ export async function lieuLePlusProche(latitude: number, longitude: number): Pro
   return lieuxProches[0] ?? null
 }
 
+/** Code officiel (INSEE) de la commune où se trouve un point, ou `null` hors de France. */
+export async function codeDeCommuneALaPosition(latitude: number, longitude: number): Promise<string | null> {
+  const parametres = new URLSearchParams({ lat: String(latitude), lon: String(longitude), fields: 'code' })
+  let reponse: Response
+  try {
+    reponse = await fetch(`${SERVICE_COMMUNES}?${parametres}`)
+  } catch {
+    throw new ErreurReseau()
+  }
+  if (!reponse.ok) throw new ErreurReseau()
+  const communes = (await reponse.json()) as { code?: string }[]
+  return communes[0]?.code?.trim() || null
+}
+
 /** Nom d'une commune d'après son code officiel (INSEE), ou `null` si le service ne la connaît pas. */
 export async function nomDeCommune(codeCommune: string): Promise<string | null> {
   let reponse: Response

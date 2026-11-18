@@ -21,7 +21,22 @@ const magasinTrajets = useTrajetsStore()
 const { accord, trajetsRecents, erreur: erreurEnregistrement } = storeToRefs(magasinTrajets)
 
 const magasinItineraire = useItineraireStore()
-const { seuilDetour, resultat, calculEnCours, erreur: erreurItineraire } = storeToRefs(magasinItineraire)
+const {
+  seuilDetour,
+  calculateur,
+  calculateurDuResultat,
+  resultat,
+  calculEnCours,
+  erreur: erreurItineraire,
+} = storeToRefs(magasinItineraire)
+const optionsDeCalculateur = [
+  { label: 'IGN', value: 'ign', hint: 'Le service public des cartes de France.' },
+  {
+    label: 'OpenStreetMap (en essai)',
+    value: 'openstreetmap',
+    hint: 'La carte libre et collaborative. Il sait mieux éviter les seuls grands axes. Plus lent : jusqu’à une minute. Trajets de 200 km au plus.',
+  },
+]
 const optionsDeDetour = SEUILS_DE_DETOUR.map((seuil) => ({
   label: `${seuil} % de distance en plus au maximum`,
   value: seuil,
@@ -269,6 +284,17 @@ async function effacer(confirme: boolean): Promise<void> {
       :options="optionsDeDetour"
       @update:model-value="(nouveauSeuil: string | number | boolean | undefined) => magasinItineraire.choisirSeuil(Number(nouveauSeuil))"
     />
+    <DsfrRadioButtonSet
+      name="calculateur"
+      legend="Calculateur d’itinéraire"
+      hint="Votre choix reste gardé sur ce téléphone."
+      :model-value="calculateur"
+      :options="optionsDeCalculateur"
+      @update:model-value="
+        (nouveauCalculateur: string | number | boolean | undefined) =>
+          magasinItineraire.choisirCalculateur(nouveauCalculateur === 'openstreetmap' ? 'openstreetmap' : 'ign')
+      "
+    />
     <p v-if="!enLigne" class="fr-mb-2w">Le calcul d’itinéraire a besoin du réseau. Il sera possible dès son retour.</p>
     <DsfrButton
       type="button"
@@ -304,6 +330,9 @@ async function effacer(confirme: boolean): Promise<void> {
             {{ enKilometres(resultat.itineraire.departementaleFortTraficMetres) }}
           </dd>
           <dd v-else>Aucun kilomètre : trajet sans départementale à fort trafic</dd>
+          <dt>Calculé avec</dt>
+          <dd v-if="calculateurDuResultat === 'openstreetmap'">OpenStreetMap (© les contributeurs d’OpenStreetMap)</dd>
+          <dd v-else>IGN</dd>
         </dl>
       </template>
       <p class="fr-sr-only">{{ annonceItineraire }}</p>

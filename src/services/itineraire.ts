@@ -62,7 +62,11 @@ export interface PointDuTrace {
   longitude: number
 }
 
-interface AttributsDuTroncon {
+/** Les deux calculateurs d'itinéraire proposés : l'IGN, ou OpenStreetMap en essai (ADR 0007). */
+export type Calculateur = 'ign' | 'openstreetmap'
+
+/** Ce qu'on sait d'un tronçon, sous la forme de la BD TOPO de l'IGN (OpenStreetMap s'y ramène). */
+export interface AttributsDuTroncon {
   cpx_numero?: string
   nom_1_gauche?: string
   cpx_toponyme_route_nommee?: string
@@ -71,7 +75,7 @@ interface AttributsDuTroncon {
   importance?: number | string
 }
 
-interface TronconRecu {
+export interface TronconRecu {
   distance: number
   attributes?: AttributsDuTroncon
 }
@@ -179,18 +183,40 @@ async function demanderItineraire(depart: Lieu, arrivee: Lieu, contraintes: stri
   }
   if (!reponse.ok) throw new ErreurReseau()
   const resultat = (await reponse.json()) as ReponseItineraire
-  const etapes = resultat.portions.flatMap((portion) => portion.steps)
+  return itineraireDepuisTroncons(
+    resultat.portions.flatMap((portion) => portion.steps),
+    resultat.distance,
+    traceRecu(resultat.geometry),
+  )
+}
+
+/** Un itinéraire à partir de ses tronçons : kilomètres à fort trafic, vitesses et étapes. */
+export function itineraireDepuisTroncons(
+  tronconsRecus: TronconRecu[],
+  distanceMetres: number,
+  trace: PointDuTrace[],
+): Itineraire {
   return {
-    distanceMetres: resultat.distance,
-    departementaleFortTraficMetres: etapes
-      .filter((etape) => estDepartementaleAFortTrafic(etape.attributes))
-      .reduce((total, etape) => total + etape.distance, 0),
-    troncons: etapes.map((etape) => ({
-      distanceMetres: etape.distance,
-      vitesseRouteKmh: vitesseDeLaRoute(etape.attributes?.vitesse_moyenne_vl),
+    distanceMetres,
+    departementaleFortTraficMetres: tronconsRecus
+      .filter((tronconRecu) => estDepartementaleAFortTrafic(tronconRecu.attributes))
+      .reduce((total, tronconRecu) => total + tronconRecu.distance, 0),
+    troncons: tronconsRecus.map((tronconRecu) => ({
+      distanceMetres: tronconRecu.distance,
+      vitesseRouteKmh: vitesseDeLaRoute(tronconRecu.attributes?.vitesse_moyenne_vl),
     })),
-    etapes: regrouperEnEtapes(etapes),
-    trace: traceRecu(resultat.geometry),
+    etapes: regrouperEnEtapes(tronconsRecus),
+    trace,
+  }
+}
+
+/** Le résultat, avec les étapes du trajet retenu remplacées (le plus court les reçoit aussi s'il est retenu). */
+export function avecLesEtapesDuTrajetRetenu(resultat: ResultatItineraire, etapes: Etape[]): ResultatItineraire {
+  const itineraireRetenu = { ...resultat.itineraire, etapes }
+  return {
+    ...resultat,
+    itineraire: itineraireRetenu,
+    plusCourt: resultat.retenuEstLePlusCourt ? itineraireRetenu : resultat.plusCourt,
   }
 }
 
@@ -248,10 +274,5 @@ export async function calculerItineraire(depart: Lieu, arrivee: Lieu, seuilDetou
     demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES, EVITEMENT_FORT_TRAFIC]),
   ])
   const resultat = choisirItineraire(plusCourt, evitantDepartementales, seuilDetourPourcent)
-  const itineraireRetenu = { ...resultat.itineraire, etapes: await nommerLesVillages(resultat.itineraire.etapes) }
-  return {
-    ...resultat,
-    itineraire: itineraireRetenu,
-    plusCourt: resultat.retenuEstLePlusCourt ? itineraireRetenu : resultat.plusCourt,
-  }
+  return avecLesEtapesDuTrajetRetenu(resultat, await nommerLesVillages(resultat.itineraire.etapes))
 }

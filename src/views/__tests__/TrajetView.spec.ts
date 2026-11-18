@@ -6,6 +6,7 @@ import TrajetView from '../TrajetView.vue'
 import { simulerLocalStorage } from '@/__tests__/stockage-simule'
 import { violationsAccessibilite } from '@/__tests__/accessibilite'
 import { EVITEMENT_FORT_TRAFIC } from '@/services/itineraire'
+import { simulerOpenStreetMap } from '@/__tests__/openstreetmap-simule'
 
 const reponseBaseAdresse = (libelles: string[]) =>
   new Response(
@@ -540,6 +541,57 @@ describe('Écran « Préparer mon trajet »', () => {
       vi.useRealTimers()
       expect(await violationsAccessibilite(document.body)).toEqual([])
       ecranAvecDepartementale.unmount()
+    })
+  })
+
+  describe('Demande #18 : essayer OpenStreetMap pour le calcul du trajet', () => {
+    const choixDuCalculateur = (ecran: Ecran) => ecran.find('input[name="calculateur"][value="openstreetmap"]')
+    const etapes = (ecran: Ecran) => ecran.findAll('#etapes-trajet li').map((etape) => etape.text().replace(/\s+/g, ' '))
+
+    async function calculerAvecOpenStreetMap(ecran: Ecran): Promise<void> {
+      await preparerTrajet(ecran, 'Dijon', 'Beaune')
+      await choixDuCalculateur(ecran).trigger('click')
+      fetchSimule.mockImplementation(
+        simulerOpenStreetMap(
+          {
+            plusCourt: [{ kilometres: 4, classe: 'primary', noms: ['D 974'], codeCommune: '21231' }],
+            fuyantLesGrandsAxes: [{ kilometres: 5, classe: 'tertiary', noms: ['D 109'], codeCommune: '21049' }],
+          },
+          { '21231': 'Dijon', '21049': 'Barges' },
+        ),
+      )
+      await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
+      await flushPromises()
+    }
+
+    it('propose le choix du calculateur, IGN par défaut, et le garde sur le téléphone', async () => {
+      const memoire = simulerLocalStorage()
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Dijon', 'Beaune')
+      expect(ecran.find('input[name="calculateur"][value="ign"]').element).toHaveProperty('checked', true)
+      expect(ecran.text()).toContain('OpenStreetMap (en essai)')
+      await choixDuCalculateur(ecran).trigger('click')
+      expect(JSON.parse(memoire.get('gladys:calculateur')!)).toBe('openstreetmap')
+      ecran.unmount()
+    })
+
+    it('calcule avec OpenStreetMap, évite la départementale à fort trafic et le dit', async () => {
+      const ecran = monter()
+      await calculerAvecOpenStreetMap(ecran)
+      expect(fetchSimule.mock.calls.some(([adresse]) => adresse.includes('openstreetmap.de'))).toBe(true)
+      expect(etapes(ecran)).toEqual(['Barges — D 109 — 5 km Départementale calme'])
+      expect(ecran.find('#resultat-itineraire').text()).toContain(
+        'Calculé avecOpenStreetMap (© les contributeurs d’OpenStreetMap)',
+      )
+      ecran.unmount()
+    })
+
+    it('aucune violation d’accessibilité automatique (choix du calculateur et résultat OpenStreetMap)', async () => {
+      const ecran = monter()
+      await calculerAvecOpenStreetMap(ecran)
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecran.unmount()
     })
   })
 
