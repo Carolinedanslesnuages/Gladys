@@ -35,6 +35,19 @@ export default defineConfig({
         // Les polices du DSFR sont lourdes : on les garde quand même, pour un affichage correct hors connexion.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: '/index.html',
+        // Morceaux de carte déjà vus (aucun téléchargement à l'avance, règle du service OpenStreetMap) :
+        // ils servent à rouvrir un trajet favori sans réseau (docs/adr/0013-trajets-favoris-hors-connexion.md).
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/tile\.openstreetmap\.org\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'fond-de-carte-openstreetmap',
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: { maxEntries: 2000, purgeOnQuotaError: true },
+            },
+          },
+        ],
       },
     }),
   ],
