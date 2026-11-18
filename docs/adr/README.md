@@ -5,3 +5,4 @@
 | [0001](0001-choix-de-la-stack.md) | Choix de la stack : application web installable (Vue 3, DSFR) | Accepted | 2026-11-17 |
 | [0002](0002-recherche-d-adresses-et-trajets-recents.md) | Recherche d'adresses (Base Adresse Nationale) et trajets récents avec accord | Accepted | 2026-11-17 |
 | [0003](0003-calcul-d-itineraire.md) | Calcul d'itinéraire (IGN) sans autoroute, départementales évitées selon un seuil choisi | Accepted | 2026-11-18 |
+| [0004](0004-duree-du-trajet.md) | Durée du trajet selon la vitesse réelle de la VSP, calculée sur l'appareil | Accepted | 2026-11-18 |

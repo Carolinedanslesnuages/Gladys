@@ -6,6 +6,8 @@ import { ErreurReseau, lieuLePlusProche, type Lieu } from '@/services/adresses'
 import { PositionRefusee, positionActuelle } from '@/services/position'
 import { NOMBRE_DE_TRAJETS_GARDES, useTrajetsStore, type Trajet } from '@/stores/trajets'
 import { SEUILS_DE_DETOUR, useItineraireStore } from '@/stores/itineraire'
+import { useDureeStore } from '@/stores/duree'
+import { VITESSE_MAXIMALE_KMH, VITESSE_MINIMALE_KMH, formaterDuree, formaterHeure, vitesseValide } from '@/services/duree'
 
 const magasinTrajets = useTrajetsStore()
 const { accord, trajetsRecents, erreur: erreurEnregistrement } = storeToRefs(magasinTrajets)
@@ -56,6 +58,47 @@ const annonceItineraire = computed(() => {
       : 'sans départementale'
   return `Itinéraire calculé : ${enKilometres(itineraire.distanceMetres)}, sans autoroute ni voie rapide, ${departementale}.`
 })
+
+// Durée et heure d'arrivée : recalculées sur l'appareil, même sans réseau.
+const magasinDuree = useDureeStore()
+const { vitesseHabituelle, heureDepart, dureeMinutes, erreur: erreurDuree } = storeToRefs(magasinDuree)
+const vitesseSaisie = ref(String(vitesseHabituelle.value))
+const erreurVitesse = ref('')
+const heureMaintenant = () => {
+  const maintenant = new Date()
+  return `${String(maintenant.getHours()).padStart(2, '0')}:${String(maintenant.getMinutes()).padStart(2, '0')}`
+}
+
+// Un nouvel itinéraire part « maintenant » par défaut.
+watch(resultat, (nouveauResultat) => {
+  if (nouveauResultat) magasinDuree.choisirHeureDepart(heureMaintenant())
+})
+
+function saisirVitesse(valeur: string | number | undefined): void {
+  vitesseSaisie.value = String(valeur ?? '')
+  const vitesse = vitesseValide(vitesseSaisie.value)
+  if (vitesse === null) {
+    erreurVitesse.value = `Indiquez une vitesse entre ${VITESSE_MINIMALE_KMH} et ${VITESSE_MAXIMALE_KMH} km/h, par exemple 40.`
+    return
+  }
+  erreurVitesse.value = ''
+  magasinDuree.choisirVitesse(vitesse)
+}
+
+const horairesEstimes = computed(() => {
+  const horaires = magasinDuree.horaires(new Date())
+  if (!horaires || dureeMinutes.value === null) return null
+  return {
+    duree: formaterDuree(dureeMinutes.value),
+    arrivee: formaterHeure(horaires.arrivee, horaires.depart),
+  }
+})
+
+const annonceDuree = computed(() =>
+  horairesEstimes.value
+    ? `Durée estimée : ${horairesEstimes.value.duree}, arrivée vers ${horairesEstimes.value.arrivee}.`
+    : '',
+)
 
 async function calculerMonItineraire(): Promise<void> {
   if (!depart.value || !arrivee.value || !enLigne.value) return
@@ -229,6 +272,45 @@ async function effacer(confirme: boolean): Promise<void> {
       </template>
       <p class="fr-sr-only">{{ annonceItineraire }}</p>
     </div>
+
+    <template v-if="horairesEstimes">
+      <h3 class="fr-h6 fr-mt-3w">Mon temps de trajet</h3>
+      <dl id="duree-trajet" class="fr-mb-2w duree-et-arrivee">
+        <div>
+          <dt>Durée estimée</dt>
+          <dd>{{ horairesEstimes.duree }}</dd>
+        </div>
+        <div>
+          <dt>Arrivée estimée</dt>
+          <dd>vers {{ horairesEstimes.arrivee }}</dd>
+        </div>
+      </dl>
+      <p id="annonce-duree" role="status" class="fr-sr-only">{{ annonceDuree }}</p>
+      <p class="fr-text--sm">
+        Calculée à {{ vitesseHabituelle.toLocaleString('fr-FR') }} km/h au plus, et moins vite si la route est plus lente.
+      </p>
+      <DsfrInputGroup
+        id="vitesse-habituelle"
+        :model-value="vitesseSaisie"
+        label="Ma vitesse moyenne habituelle, en km/h"
+        label-visible
+        :hint="`Entre ${VITESSE_MINIMALE_KMH} et ${VITESSE_MAXIMALE_KMH} km/h. Elle reste gardée sur ce téléphone.`"
+        :error-message="erreurVitesse || erreurDuree || undefined"
+        type="text"
+        inputmode="decimal"
+        autocomplete="off"
+        @update:model-value="saisirVitesse"
+      />
+      <DsfrInputGroup
+        id="heure-depart"
+        :model-value="heureDepart"
+        label="Mon heure de départ"
+        label-visible
+        hint="Par défaut : maintenant. Vide : départ maintenant."
+        type="time"
+        @update:model-value="(heureSaisie: string | number | undefined) => magasinDuree.choisirHeureDepart(String(heureSaisie ?? ''))"
+      />
+    </template>
   </section>
   <DsfrAlert v-if="erreurEnregistrement" type="error" small :description="erreurEnregistrement" class="fr-mb-2w" />
 
@@ -294,6 +376,11 @@ dt {
 }
 dd {
   margin: 0 0 1rem;
+}
+.duree-et-arrivee {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 2rem;
 }
 .question-accord {
   border: 1px solid var(--border-default-grey);

@@ -5,6 +5,7 @@
  * `ErreurReseau`.
  */
 import { ErreurReseau, type Lieu } from '@/services/adresses'
+import type { Troncon } from '@/services/duree'
 
 const SERVICE_ITINERAIRE = 'https://data.geopf.fr/navigation/itineraire'
 
@@ -28,11 +29,24 @@ export const EVITEMENT_DEPARTEMENTALES = JSON.stringify({
 export interface Itineraire {
   distanceMetres: number
   departementaleMetres: number
+  /** Ses tronçons, avec la vitesse de chaque route, pour calculer la durée sur l'appareil. */
+  troncons: Troncon[]
 }
 
 interface ReponseItineraire {
   distance: number
-  portions: { steps: { distance: number; attributes?: { name?: { cpx_numero?: string } } }[] }[]
+  portions: {
+    steps: {
+      distance: number
+      attributes?: { name?: { cpx_numero?: string }; vitesse_moyenne_vl?: number | string }
+    }[]
+  }[]
+}
+
+/** Vitesse habituelle des voitures sur la route (BD TOPO), ou `null` si elle est inconnue. */
+const vitesseDeLaRoute = (vitesseBrute: number | string | undefined): number | null => {
+  const vitesse = Number(vitesseBrute)
+  return vitesseBrute !== undefined && vitesseBrute !== '' && vitesse > 0 ? vitesse : null
 }
 
 /** Une route départementale porte un numéro « D… » (ou « RD… ») dans les données de l'IGN. */
@@ -48,6 +62,7 @@ async function demanderItineraire(depart: Lieu, arrivee: Lieu, contraintes: stri
     constraints: contraintes.join('|'),
     getSteps: 'true',
     distanceUnit: 'meter',
+    waysAttributes: 'vitesse_moyenne_vl',
   })
   let reponse: Response
   try {
@@ -63,6 +78,10 @@ async function demanderItineraire(depart: Lieu, arrivee: Lieu, contraintes: stri
     departementaleMetres: etapes
       .filter((etape) => estDepartementale(etape.attributes?.name?.cpx_numero))
       .reduce((total, etape) => total + etape.distance, 0),
+    troncons: etapes.map((etape) => ({
+      distanceMetres: etape.distance,
+      vitesseRouteKmh: vitesseDeLaRoute(etape.attributes?.vitesse_moyenne_vl),
+    })),
   }
 }
 

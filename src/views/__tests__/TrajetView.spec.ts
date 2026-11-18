@@ -332,6 +332,93 @@ describe('Écran « Préparer mon trajet »', () => {
     })
   })
 
+  describe('Story #4 : connaître mon vrai temps de trajet', () => {
+    /** 15 km sur une route où les voitures roulent à 80 km/h, et 6 km sur une route à 30 km/h. */
+    const reponseAvecVitesses = () =>
+      new Response(
+        JSON.stringify({
+          distance: 21000,
+          portions: [
+            {
+              steps: [
+                { distance: 15000, attributes: { name: { cpx_numero: 'C3' }, vitesse_moyenne_vl: 80 } },
+                { distance: 6000, attributes: { name: { cpx_numero: 'C4' }, vitesse_moyenne_vl: 30 } },
+              ],
+            },
+          ],
+        }),
+      )
+
+    async function calculerPuisPartirA(ecran: Ecran, heure: string): Promise<void> {
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      fetchSimule.mockResolvedValueOnce(reponseAvecVitesses()).mockResolvedValueOnce(reponseAvecVitesses())
+      await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
+      await flushPromises()
+      await ecran.find('#heure-depart').setValue(heure)
+    }
+
+    const duree = (ecran: Ecran) => ecran.find('#duree-trajet')
+
+    it('Critères 1 et 2 : durée à 45 km/h au plus (30 sur la route lente), arrivée à côté', async () => {
+      const ecran = monter()
+      await calculerPuisPartirA(ecran, '08:00')
+      // 15 km à 45 km/h = 20 min ; 6 km à 30 km/h = 12 min.
+      expect(duree(ecran).text()).toContain('Durée estimée32 min')
+      expect(duree(ecran).text()).toContain('Arrivée estiméevers 8 h 32')
+      expect(ecran.find('#annonce-duree').text()).toBe('Durée estimée : 32 min, arrivée vers 8 h 32.')
+      ecran.unmount()
+    })
+
+    it('part de maintenant par défaut', async () => {
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      fetchSimule.mockResolvedValueOnce(reponseAvecVitesses()).mockResolvedValueOnce(reponseAvecVitesses())
+      await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
+      await flushPromises()
+      const maintenant = new Date()
+      const attendu = `${String(maintenant.getHours()).padStart(2, '0')}:${String(maintenant.getMinutes()).padStart(2, '0')}`
+      expect((ecran.find('#heure-depart').element as HTMLInputElement).value).toBe(attendu)
+      ecran.unmount()
+    })
+
+    it('Critère 3 : à 40 km/h la durée est recalculée, même sans réseau, et la vitesse est gardée', async () => {
+      const ecran = monter()
+      await calculerPuisPartirA(ecran, '08:00')
+      definirEnLigne(false)
+      window.dispatchEvent(new Event('offline'))
+      fetchSimule.mockClear()
+      await ecran.find('#vitesse-habituelle').setValue('40')
+      // 15 km à 40 km/h = 22 min 30 ; 6 km à 30 km/h = 12 min.
+      expect(duree(ecran).text()).toContain('Durée estimée35 min')
+      expect(duree(ecran).text()).toContain('vers 8 h 35')
+      expect(fetchSimule).not.toHaveBeenCalled()
+      expect(localStorage.getItem('leon:vitesse-habituelle')).toBe('40')
+      ecran.unmount()
+    })
+
+    it('refuse une vitesse hors de 10 à 45 km/h avec un message clair, sans changer la durée', async () => {
+      const ecran = monter()
+      await calculerPuisPartirA(ecran, '08:00')
+      await ecran.find('#vitesse-habituelle').setValue('60')
+      expect(ecran.text()).toContain('Indiquez une vitesse entre 10 et 45 km/h, par exemple 40.')
+      const descriptions = ecran.find('#vitesse-habituelle').attributes('aria-describedby')!.split(' ')
+      expect(descriptions.map((idDescription) => document.getElementById(idDescription)?.textContent).join(' ')).toContain(
+        'Indiquez une vitesse entre 10 et 45 km/h',
+      )
+      expect(duree(ecran).text()).toContain('Durée estimée32 min')
+      ecran.unmount()
+    })
+
+    it('aucune violation d’accessibilité automatique (durée, vitesse, heure et erreur)', async () => {
+      const ecran = monter()
+      await calculerPuisPartirA(ecran, '08:00')
+      await ecran.find('#vitesse-habituelle').setValue('5')
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecran.unmount()
+    })
+  })
+
   it('aucune violation d’accessibilité automatique (propositions, question d’accord, trajets récents)', async () => {
     const ecran = monter()
     await preparerTrajet(ecran, 'Lyon', 'Vienne')
