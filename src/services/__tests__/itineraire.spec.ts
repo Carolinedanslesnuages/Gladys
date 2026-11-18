@@ -100,8 +100,8 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
   })
 
   describe('Critère 2 : on évite les départementales si le détour reste sous le seuil choisi', () => {
-    const direct = { distanceMetres: 10000, departementaleMetres: 4000, troncons: [], etapes: [] }
-    const parLesVillages = { distanceMetres: 12500, departementaleMetres: 0, troncons: [], etapes: [] }
+    const direct = { distanceMetres: 10000, departementaleMetres: 4000, troncons: [], etapes: [], trace: [] }
+    const parLesVillages = { distanceMetres: 12500, departementaleMetres: 0, troncons: [], etapes: [], trace: [] }
 
     it('retient le trajet de 12,5 km sans départementale à 30 % (trajet direct : 10 km)', () => {
       expect(choisirItineraire(direct, parLesVillages, 30)).toEqual({
@@ -125,14 +125,58 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
   })
 
   it('Critère 4 : sans trajet sans départementale, propose le plus sûr (le moins de départementale)', () => {
-    const direct = { distanceMetres: 10000, departementaleMetres: 4000, troncons: [], etapes: [] }
-    const moinsDeDepartementale = { distanceMetres: 11000, departementaleMetres: 1500, troncons: [], etapes: [] }
+    const direct = { distanceMetres: 10000, departementaleMetres: 4000, troncons: [], etapes: [], trace: [] }
+    const moinsDeDepartementale = { distanceMetres: 11000, departementaleMetres: 1500, troncons: [], etapes: [], trace: [] }
     expect(choisirItineraire(direct, moinsDeDepartementale, 10)).toEqual({
       itineraire: moinsDeDepartementale,
       plusCourt: direct,
       retenuEstLePlusCourt: false,
       sansDepartementalePossible: false,
       detourTropLong: false,
+    })
+  })
+
+  describe('Demande #16 : le tracé du trajet, pour la carte', () => {
+    const reponseAvecTrace = (coordonnees: number[][]) =>
+      new Response(
+        JSON.stringify({
+          distance: 1000,
+          geometry: { type: 'LineString', coordinates: coordonnees },
+          portions: [{ steps: [{ distance: 1000, attributes: { name: { cpx_numero: 'C1' } } }] }],
+        }),
+      )
+
+    it('demande le tracé en GeoJSON et garde celui du trajet retenu, en latitude et longitude', async () => {
+      fetchSimule.mockImplementation((adresse) =>
+        Promise.resolve(
+          adresse.includes('departementale')
+            ? reponseAvecTrace([
+                [4.85, 45.75],
+                [4.9, 45.6],
+                [4.87, 45.52],
+              ])
+            : reponseAvecTrace([
+                [4.85, 45.75],
+                [4.87, 45.52],
+              ]),
+        ),
+      )
+      const resultat = await calculerItineraire(lyon, vienne, 30)
+      for (const [adresse] of fetchSimule.mock.calls.filter(([adresse]) => adresse.includes('/navigation/'))) {
+        expect(new URL(adresse).searchParams.get('geometryFormat')).toBe('geojson')
+      }
+      expect(resultat.retenuEstLePlusCourt).toBe(false)
+      expect(resultat.itineraire.trace).toEqual([
+        { latitude: 45.75, longitude: 4.85 },
+        { latitude: 45.6, longitude: 4.9 },
+        { latitude: 45.52, longitude: 4.87 },
+      ])
+    })
+
+    it('un trajet sans tracé reçu garde un tracé vide, sans erreur', async () => {
+      fetchSimule.mockImplementation(() => Promise.resolve(reponseIgn([{ numero: '', metres: 10000 }])))
+      const resultat = await calculerItineraire(lyon, vienne, 30)
+      expect(resultat.itineraire.trace).toEqual([])
     })
   })
 

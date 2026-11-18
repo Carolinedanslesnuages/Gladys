@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import ChampLieu from '@/components/ChampLieu.vue'
+import CarteTrajet from '@/components/CarteTrajet.vue'
 import { ErreurReseau, lieuLePlusProche, type Lieu } from '@/services/adresses'
 import { PositionRefusee, positionActuelle } from '@/services/position'
 import { NOMBRE_DE_TRAJETS_GARDES, useTrajetsStore, type Trajet } from '@/stores/trajets'
@@ -359,6 +360,11 @@ async function effacer(confirme: boolean): Promise<void> {
         </dl>
       </div>
       <p id="annonce-comparaison" role="status" class="fr-sr-only">{{ comparaison.annonce }}</p>
+    </template>
+
+    <template v-if="resultat && resultat.itineraire.trace.length >= 2">
+      <h3 class="fr-h6 fr-mt-3w">Mon trajet sur la carte</h3>
+      <CarteTrajet :trace="resultat.itineraire.trace" :depart="depart" :arrivee="arrivee" :en-ligne="enLigne" />
     </template>
 
     <template v-if="resultat && resultat.itineraire.etapes.length > 0">
