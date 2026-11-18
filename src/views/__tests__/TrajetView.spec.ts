@@ -214,6 +214,124 @@ describe('Écran « Préparer mon trajet »', () => {
     })
   })
 
+  describe('Story #3 : calculer un itinéraire adapté à ma VSP', () => {
+    const reponseIgn = (metres: number, departementaleMetres: number) =>
+      new Response(
+        JSON.stringify({
+          distance: metres,
+          portions: [
+            {
+              steps: [
+                { distance: metres - departementaleMetres, attributes: { name: { cpx_numero: 'C3' } } },
+                { distance: departementaleMetres, attributes: { name: { cpx_numero: 'D502' } } },
+              ],
+            },
+          ],
+        }),
+      )
+
+    async function calculer(ecran: Ecran, plusCourt: Response, evitantDepartementales: Response): Promise<void> {
+      fetchSimule.mockResolvedValueOnce(plusCourt).mockResolvedValueOnce(evitantDepartementales)
+      await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
+      await flushPromises()
+    }
+
+    const resultat = (ecran: Ecran) => ecran.find('#resultat-itineraire')
+
+    it('propose le calcul une fois le départ et l’arrivée choisis, sans autoroute ni voie rapide', async () => {
+      const ecran = monter()
+      expect(ecran.text()).not.toContain('Calculer mon itinéraire')
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      fetchSimule.mockClear()
+      await calculer(ecran, reponseIgn(10000, 0), reponseIgn(10000, 0))
+      expect(fetchSimule).toHaveBeenCalledTimes(2)
+      for (const [adresse] of fetchSimule.mock.calls) {
+        expect(new URL(adresse).searchParams.get('constraints')).toContain('"constraintType":"banned","key":"wayType"')
+      }
+      expect(resultat(ecran).attributes('role')).toBe('status')
+      expect(resultat(ecran).text()).toContain('Distance totale10 km')
+      expect(resultat(ecran).text()).toContain('Aucun kilomètre : trajet sans départementale')
+      expect(resultat(ecran).text()).toContain('Itinéraire calculé : 10 km, sans autoroute ni voie rapide, sans départementale.')
+      ecran.unmount()
+    })
+
+    it('Critère 2 : 30 % par défaut retient le détour de 12,5 km ; 20 % le refuse', async () => {
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      expect((ecran.find('input[name="seuil-detour"][value="30"]').element as HTMLInputElement).checked).toBe(true)
+      await calculer(ecran, reponseIgn(10000, 4000), reponseIgn(12500, 0))
+      expect(resultat(ecran).text()).toContain('12,5 km')
+      expect(resultat(ecran).text()).toContain('trajet sans départementale')
+
+      await ecran.find('input[name="seuil-detour"][value="20"]').trigger('click')
+      expect((ecran.find('input[name="seuil-detour"][value="20"]').element as HTMLInputElement).checked).toBe(true)
+      await calculer(ecran, reponseIgn(10000, 4000), reponseIgn(12500, 0))
+      expect(resultat(ecran).text()).toContain('son détour dépasse 20 %')
+      expect(resultat(ecran).text()).toContain('Sur départementale4 km')
+      ecran.unmount()
+    })
+
+    it('Critère 2 : le seuil choisi est retrouvé au retour dans l’appli', async () => {
+      simulerLocalStorage({ 'leon:seuil-detour': '50' })
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      expect((ecran.find('input[name="seuil-detour"][value="50"]').element as HTMLInputElement).checked).toBe(true)
+      ecran.unmount()
+    })
+
+    it('Critère 3 : affiche les kilomètres de départementale qui restent', async () => {
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      await calculer(ecran, reponseIgn(10000, 5000), reponseIgn(11000, 3200))
+      expect(resultat(ecran).text()).toContain('Sur départementale3,2 km')
+      expect(resultat(ecran).text()).toContain('dont 3,2 km sur départementale')
+      ecran.unmount()
+    })
+
+    it('Critère 4 : sans trajet sans départementale, le dit puis propose le trajet le plus sûr', async () => {
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      await calculer(ecran, reponseIgn(10000, 5000), reponseIgn(11000, 3200))
+      expect(resultat(ecran).text()).toContain('Aucun itinéraire sans départementale n’existe pour ce trajet.')
+      expect(resultat(ecran).text()).toContain('Distance totale11 km')
+      ecran.unmount()
+    })
+
+    it('hors connexion, désactive le calcul, l’explique et ne lance rien', async () => {
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      fetchSimule.mockClear()
+      definirEnLigne(false)
+      window.dispatchEvent(new Event('offline'))
+      await flushPromises()
+      expect(ecran.text()).toContain('Le calcul d’itinéraire a besoin du réseau.')
+      const bouton = boutonNomme(ecran, 'Calculer mon itinéraire')
+      expect(bouton.attributes('disabled')).toBeDefined()
+      await bouton.trigger('click')
+      expect(fetchSimule).not.toHaveBeenCalled()
+      ecran.unmount()
+    })
+
+    it('dit clairement quand le service de calcul ne répond pas', async () => {
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      fetchSimule.mockRejectedValue(new TypeError('Failed to fetch'))
+      await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
+      await flushPromises()
+      expect(resultat(ecran).text()).toContain('Le calcul d’itinéraire a besoin du réseau et le service ne répond pas.')
+      ecran.unmount()
+    })
+
+    it('aucune violation d’accessibilité automatique (choix du détour, résultat et message)', async () => {
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      await calculer(ecran, reponseIgn(10000, 5000), reponseIgn(11000, 3200))
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecran.unmount()
+    })
+  })
+
   it('aucune violation d’accessibilité automatique (propositions, question d’accord, trajets récents)', async () => {
     const ecran = monter()
     await preparerTrajet(ecran, 'Lyon', 'Vienne')
