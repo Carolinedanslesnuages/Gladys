@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import VueDsfr from '@gouvminint/vue-dsfr'
 import Leaflet from 'leaflet'
 import CarteTrajet from '../CarteTrajet.vue'
 import type { Lieu } from '@/services/adresses'
@@ -18,9 +17,7 @@ const trace: PointDuTrace[] = [
 
 const monter = (enLigne = true) =>
   mount(CarteTrajet, {
-    props: { trace, depart: lyon, arrivee: vienne, enLigne },
-    global: { plugins: [VueDsfr] },
-    attachTo: document.body,
+    props: { trace, depart: lyon, arrivee: vienne, enLigne },    attachTo: document.body,
   })
 
 /** Les boutons posés sur la carte n'ont qu'une icône : leur nom est dans `aria-label`. */
@@ -102,8 +99,8 @@ describe('Carte du trajet', () => {
     expect(document.querySelector('.epingle--depart circle.dessin-epingle')).not.toBeNull()
     expect(document.querySelector('.epingle--arrivee path.dessin-epingle')).not.toBeNull()
     // Leur nom reste lu par les lecteurs d'écran.
-    expect(document.querySelector('.epingle--depart .fr-sr-only')!.textContent).toBe('Départ')
-    expect(document.querySelector('.epingle--arrivee .fr-sr-only')!.textContent).toBe('Arrivée')
+    expect(document.querySelector('.epingle--depart .visuellement-cache')!.textContent).toBe('Départ')
+    expect(document.querySelector('.epingle--arrivee .visuellement-cache')!.textContent).toBe('Arrivée')
     ecran.unmount()
   })
 
@@ -175,9 +172,7 @@ describe('Carte du trajet', () => {
 
   it('Story #6 : trajet favori sans réseau, garde la carte et dit que les zones jamais vues restent vides', async () => {
     const ecran = mount(CarteTrajet, {
-      props: { trace, depart: lyon, arrivee: vienne, enLigne: false, carteHorsConnexion: true },
-      global: { plugins: [VueDsfr] },
-      attachTo: document.body,
+      props: { trace, depart: lyon, arrivee: vienne, enLigne: false, carteHorsConnexion: true },      attachTo: document.body,
     })
     expect(ecran.find('#carte-trajet path').exists()).toBe(true)
     expect(ecran.find('#etat-carte').attributes('role')).toBe('status')
@@ -251,7 +246,7 @@ describe('Carte du trajet', () => {
       // Demande #30 : seul « 10,9 km » se voit ; la phrase entière reste lue par les lecteurs d'écran.
       expect(ecran.find('#avancement-trajet strong').text()).toBe('10,9 km')
       expect(
-        ecran.findAll('#avancement-trajet .fr-sr-only').map((morceau) => morceau.text()),
+        ecran.findAll('#avancement-trajet .visuellement-cache').map((morceau) => morceau.text()),
       ).toEqual(['Il vous reste', 'jusqu’à l’arrivée.'])
       ecran.unmount()
     })
@@ -263,9 +258,7 @@ describe('Carte du trajet', () => {
           'sur-la-carte': `<template #sur-la-carte="{ distanceRestanteAffichee }">
             <p id="resume-pose">{{ distanceRestanteAffichee ? 'à côté' : 'seul' }}</p>
           </template>`,
-        },
-        global: { plugins: [VueDsfr] },
-        attachTo: document.body,
+        },        attachTo: document.body,
       })
       expect(ecran.find('#resume-pose').text()).toBe('seul')
       await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
@@ -353,7 +346,7 @@ describe('Carte du trajet', () => {
       )
       expect(repereVous().querySelector('.etiquette-repere')).toBeNull()
       expect(repereVous().textContent).toBe('Votre position')
-      expect(repereVous().querySelector('.fr-sr-only')).not.toBeNull()
+      expect(repereVous().querySelector('.visuellement-cache')).not.toBeNull()
       // Sans direction donnée par le GPS : celle du déplacement (ici, plein sud).
       await recevoirPosition(ecran, 45.59, 4.95)
       expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(false)
@@ -475,9 +468,7 @@ describe('Carte du trajet', () => {
             arrivee: null,
             enLigne: true,
             suivreDesLOuverture: true,
-          },
-          global: { plugins: [VueDsfr] },
-          attachTo: document.body,
+          },          attachTo: document.body,
         })
         await recevoirPosition(ecran, 45.75, 4.85)
         await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
@@ -611,9 +602,7 @@ describe('Carte du trajet', () => {
             arrivee: null,
             enLigne: true,
             suivreDesLOuverture: true,
-          },
-          global: { plugins: [VueDsfr] },
-          attachTo: document.body,
+          },          attachTo: document.body,
         })
 
       it('sans trajet, s’ouvre sur la France, cherche la personne et se centre sur elle', async () => {
@@ -638,7 +627,7 @@ describe('Carte du trajet', () => {
         const ecran = monterAlAccueil()
         surEchec!({ code: 1 })
         await ecran.vm.$nextTick()
-        expect(ecran.find('.fr-alert--error').exists()).toBe(false)
+        expect(ecran.find('.alerte--error').exists()).toBe(false)
         expect(ecran.find('#annonce-suivi').text()).toContain('la carte montre la France')
         expect(boutonNomme(ecran, 'Suivre ma position sur la carte')).toBeTruthy()
         ecran.unmount()

@@ -2,14 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import VueDsfr from '@gouvminint/vue-dsfr'
 import App from '@/App.vue'
 import router from '@/router'
 import { simulerLocalStorage } from './stockage-simule'
 import { violationsAccessibilite } from './accessibilite'
 
-const BLEU_FRANCE = '#000091'
-const ROUGE_MARIANNE = '#E1000F'
+const VERT_ROUTE = '#1F7A4D'
+const JAUNE_ETOILE = '#F2A900'
 const TRACE_ETOILE = 'M203 8 Q206 25 223 28 Q206 31 203 48 Q200 31 183 28 Q200 25 203 8 Z'
 
 describe('Logo de Gladys', () => {
@@ -27,7 +26,7 @@ describe('Logo de Gladys', () => {
     await router.push('/')
     await router.isReady()
     const application = mount(App, {
-      global: { plugins: [VueDsfr, router] },
+      global: { plugins: [router] },
       attachTo: document.body,
     })
     await application.vm.$nextTick()
@@ -40,11 +39,11 @@ describe('Logo de Gladys', () => {
   })
 
   it.each([['public/logo-gladys.svg'], ['public/favicon.svg']])(
-    '%s est en bleu France, avec l’étoile rouge à quatre branches, sur fond transparent',
+    '%s est en vert route, avec la petite étoile jaune à quatre branches, sur fond transparent',
     (chemin) => {
       const dessin = readFileSync(chemin, 'utf8')
-      expect(dessin).toContain(`stroke="${BLEU_FRANCE}"`)
-      expect(dessin).toContain(`fill="${ROUGE_MARIANNE}"`)
+      expect(dessin).toContain(`stroke="${VERT_ROUTE}"`)
+      expect(dessin).toContain(`fill="${JAUNE_ETOILE}"`)
       expect(dessin).toContain(TRACE_ETOILE)
       expect(dessin).not.toContain('<rect')
       expect(dessin).toContain('<title>Gladys</title>')

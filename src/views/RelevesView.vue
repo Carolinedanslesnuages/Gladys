@@ -2,6 +2,10 @@
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRelevesStore } from '@/stores/releves'
+import Alerte from '@/components/interface/Alerte.vue'
+import Bouton from '@/components/interface/Bouton.vue'
+import ChampSaisie from '@/components/interface/ChampSaisie.vue'
+import Icone from '@/components/interface/Icone.vue'
 
 const magasin = useRelevesStore()
 const { releves, erreur } = storeToRefs(magasin)
@@ -29,29 +33,28 @@ const dateLisible = (iso: string) => new Date(iso).toLocaleString('fr-FR', { dat
 </script>
 
 <template>
-  <div class="fr-container fr-my-6w">
+  <div class="conteneur marge-verticale-12">
     <!-- Sans en-tête, ce lien ramène à la carte (et à son bouton « À propos »). -->
-    <RouterLink to="/" class="fr-link fr-icon-arrow-left-line fr-link--icon-left">Retour à la carte</RouterLink>
-    <h1 class="fr-mt-2w">GLADYS</h1>
+    <RouterLink to="/" class="lien-retour"><Icone nom="flecheGauche" />Retour à la carte</RouterLink>
+    <h1 class="marge-haut-4">GLADYS</h1>
     <p>Exemple : des relevés saisis sur le terrain, même sans réseau. Ils restent sur cet appareil.</p>
 
-    <form novalidate class="fr-mb-4w" @submit.prevent="ajouter">
-      <DsfrInputGroup v-model="texte" label="Nouveau relevé" label-visible :error-message="erreurSaisie" />
-      <DsfrButton type="submit" label="Ajouter" icon="fr-icon-add-line" />
+    <form novalidate class="marge-bas-8" @submit.prevent="ajouter">
+      <ChampSaisie id="nouveau-releve" v-model="texte" label="Nouveau relevé" :message-erreur="erreurSaisie" />
+      <Bouton type="submit" label="Ajouter" icone="ajouter" />
     </form>
 
-    <p role="status" class="fr-sr-only">{{ annonce }}</p>
-    <DsfrAlert v-if="erreur" type="error" small :description="erreur" class="fr-mb-2w" />
+    <p role="status" class="visuellement-cache">{{ annonce }}</p>
+    <Alerte v-if="erreur" type="error" :description="erreur" class="marge-bas-4" />
 
-    <h2 class="fr-h5">Relevés ({{ releves.length }})</h2>
+    <h2 class="titre-5">Relevés ({{ releves.length }})</h2>
     <p v-if="releves.length === 0">Aucun relevé pour l’instant.</p>
-    <ul v-else class="fr-p-0 releves">
-      <li v-for="releve in releves" :key="releve.id" class="fr-mb-2w">
-        <p class="fr-mb-1v">{{ releve.texte }}</p>
-        <p class="fr-text--xs fr-mb-1v">Saisi le {{ dateLisible(releve.saisiLe) }}</p>
-        <DsfrButton
-          size="sm"
-          tertiary
+    <ul v-else class="sans-remplissage releves">
+      <li v-for="releve in releves" :key="releve.id" class="marge-bas-4">
+        <p class="marge-bas-1">{{ releve.texte }}</p>
+        <p class="texte-petit marge-bas-1">Saisi le {{ dateLisible(releve.saisiLe) }}</p>
+        <Bouton
+          variante="discret"
           label="Supprimer"
           :aria-label="`Supprimer le relevé « ${releve.texte} »`"
           @click="supprimer(releve.id)"
@@ -59,21 +62,43 @@ const dateLisible = (iso: string) => new Date(iso).toLocaleString('fr-FR', { dat
       </li>
     </ul>
 
-    <DsfrAccordionsGroup class="fr-mt-4w">
-      <DsfrAccordion id="installer" title="Installer l’application sur mon téléphone">
-        <ul>
-          <li><strong>Android (Chrome, Edge)</strong> : menu ⋮, puis « Installer l’application ».</li>
-          <li><strong>iPhone (Safari)</strong> : bouton Partager, puis « Sur l’écran d’accueil ».</li>
-          <li><strong>Ordinateur (Chrome, Edge)</strong> : icône d’installation dans la barre d’adresse.</li>
-        </ul>
-        <p class="fr-mb-0">Une fois installée, elle s’ouvre comme une application et fonctionne sans réseau.</p>
-      </DsfrAccordion>
-    </DsfrAccordionsGroup>
+    <details class="installer marge-haut-8">
+      <summary>Installer l’application sur mon téléphone</summary>
+      <ul>
+        <li><strong>Android (Chrome, Edge)</strong> : menu ⋮, puis « Installer l’application ».</li>
+        <li><strong>iPhone (Safari)</strong> : bouton Partager, puis « Sur l’écran d’accueil ».</li>
+        <li><strong>Ordinateur (Chrome, Edge)</strong> : icône d’installation dans la barre d’adresse.</li>
+      </ul>
+      <p class="marge-bas-0">Une fois installée, elle s’ouvre comme une application et fonctionne sans réseau.</p>
+    </details>
   </div>
 </template>
 
 <style scoped>
 .releves {
   list-style: none;
+}
+.lien-retour {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--cible-minimale);
+}
+.installer {
+  border: 2px solid var(--bordure-legere);
+  border-radius: 0.5rem;
+}
+.installer summary {
+  min-height: var(--cible-minimale);
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.installer > :not(summary) {
+  margin-left: 1rem;
+  margin-right: 1rem;
+}
+.installer > :last-child {
+  margin-bottom: 1rem;
 }
 </style>

@@ -16,7 +16,6 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
-    "@gouvminint/vue-dsfr": "^8.21.0",
     "@iconify/vue": "^5.0.5",
     "leaflet": "^1.9.4",
     "leaflet-rotate": "0.2.8",

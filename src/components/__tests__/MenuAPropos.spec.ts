@@ -1,19 +1,18 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import VueDsfr from '@gouvminint/vue-dsfr'
 import router from '@/router'
 import MenuAPropos from '../MenuAPropos.vue'
 import { violationsAccessibilite } from '@/__tests__/accessibilite'
 
 const monter = () =>
-  mount(MenuAPropos, { global: { plugins: [VueDsfr, router] }, attachTo: document.body })
+  mount(MenuAPropos, { global: { plugins: [router] }, attachTo: document.body })
 type Ecran = ReturnType<typeof monter>
 
 async function ouvrir(ecran: Ecran): Promise<void> {
   await ecran.find('#bouton-a-propos').trigger('click')
   await flushPromises()
 }
-const panneau = () => document.querySelector<HTMLDialogElement>('dialog.fr-modal')
+const panneau = () => document.querySelector<HTMLDialogElement>('dialog.fenetre-modale')
 
 describe('Demandes #26 et #30 : bouton « À propos » et son panneau', () => {
   afterEach(() => {
@@ -42,14 +41,13 @@ describe('Demandes #26 et #30 : bouton « À propos » et son panneau', () => {
     ecran.unmount()
   })
 
-  it('contient le logo Gladys, le bloc marque, et les informations légales', async () => {
+  it('contient le logo Gladys, sans aucun élément du système de design de l’État, et les informations légales', async () => {
     const ecran = monter()
     await ouvrir(ecran)
     const fenetre = panneau()!
     expect(fenetre.querySelector('img.logo-gladys')?.getAttribute('alt')).toBe('Gladys')
-    // Bloc marque DSFR : « République » et « Française » sur deux lignes.
-    expect(fenetre.querySelector('.fr-logo')?.textContent?.trim()).toBe('RépubliqueFrançaise')
-    expect(fenetre.querySelector('.fr-logo br')).not.toBeNull()
+    expect(fenetre.textContent).not.toContain('République Française')
+    expect(fenetre.querySelector('[class*="fr-"]')).toBeNull()
     const titres = Array.from(fenetre.querySelectorAll('h3')).map((titre) =>
       titre.textContent?.trim(),
     )

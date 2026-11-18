@@ -26,8 +26,10 @@ téléphone ou ordinateur depuis le navigateur et **fonctionne hors connexion**.
   ou fait, en toutes lettres (`salleLibre`, `reservationsDuJour`, `violation`), jamais `el`,
   `x`, `s`, `tmp`, `data2`. Seuls les noms imposés par les bibliothèques restent tels quels
   (`vi`, `expect`, `app`…). Contrôlé par le lint (`id-length`, 3 caractères minimum) : la CI échoue sinon.
-- Vue 3, `<script setup lang="ts">`, un dossier `src/views/` par écran, composants DSFR (`Dsfr*`
-  de `@gouvminint/vue-dsfr`) plutôt que du HTML maison.
+- Vue 3, `<script setup lang="ts">`, un dossier `src/views/` par écran, composants maison de
+  `src/components/interface/` (`Bouton`, `ChampSaisie`, `Alerte`…) plutôt que du HTML recodé à chaque écran.
+  Le projet n'utilise plus le DSFR (`ada.json` : `"dsfr": false`) : ni bibliothèque, ni classes `fr-…`.
+  Couleurs et espacements : `src/styles/gladys.css` (vert route `#1F7A4D`, police du système).
 - Données : uniquement depuis `src/donnees/*.json`, **via un store Pinia** (jamais lues directement
   par un écran) : on pourra les remplacer par une vraie API sans toucher aux écrans.
 - **Pinia** (installé et activé dans `src/main.ts`) : créer un store `src/stores/<domaine>.ts`
@@ -45,13 +47,14 @@ téléphone ou ordinateur depuis le navigateur et **fonctionne hors connexion**.
 Le service doit être utilisable par tous (RGAA 4, obligatoire dans l'administration). À chaque
 écran ou composant, sans exception :
 
-- **Composants DSFR** d'abord (`Dsfr*`) : ils sont déjà accessibles ; ne pas recoder un bouton,
-  un champ ou une alerte en HTML maison. Ne jamais changer leurs couleurs (contrastes du DSFR).
+- **Composants maison** d'abord (`src/components/interface/`) : ils sont déjà accessibles (44 px,
+  intitulé visible, étiquette liée) ; ne pas recoder un bouton, un champ ou une alerte en HTML
+  à chaque écran. Texte : au moins 4,5:1 de contraste (couleurs de `src/styles/gladys.css`, testées).
 - **Page** : `lang="fr"`, un titre de page (`<title>`) qui dit où l'on est, un seul `h1`, des
   titres `h2`, `h3`… sans saut de niveau ; liens d'évitement conservés.
 - **Images** : alternative qui dit l'information (`alt="…"`), ou `alt=""` si décorative.
 - **Formulaires** : chaque champ a une étiquette visible liée ; champs obligatoires signalés ;
-  erreurs écrites en clair et reliées au champ (`DsfrInputGroup` avec `error-message`).
+  erreurs écrites en clair et reliées au champ (`ChampSaisie` avec `message-erreur`).
 - **Clavier** : tout ce qui se fait à la souris se fait au clavier, dans un ordre logique, avec
   un focus visible ; jamais de `tabindex` positif ; un élément cliquable est un `<button>` ou un lien.
 - **Liens et boutons** : intitulé compréhensible hors contexte (jamais « cliquez ici ») ; un lien

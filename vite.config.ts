@@ -22,7 +22,7 @@ export default defineConfig({
         lang: 'fr',
         display: 'standalone',
         start_url: '/',
-        theme_color: '#000091',
+        theme_color: '#1F7A4D',
         background_color: '#ffffff',
         icons: [
           { src: 'icone-192.png', sizes: '192x192', type: 'image/png' },
@@ -32,8 +32,6 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-        // Les polices du DSFR sont lourdes : on les garde quand même, pour un affichage correct hors connexion.
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: '/index.html',
         // Morceaux de carte déjà vus (aucun téléchargement à l'avance, règle du service OpenStreetMap) :
         // ils servent à rouvrir un trajet favori sans réseau (docs/adr/0013-trajets-favoris-hors-connexion.md).
@@ -55,10 +53,5 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
-  },
-  // Le DSFR contient des media queries réservées à Internet Explorer (min-width:0\0)
-  // que le minificateur refuse : on les ignore.
-  css: {
-    lightningcss: { errorRecovery: true },
   },
 })

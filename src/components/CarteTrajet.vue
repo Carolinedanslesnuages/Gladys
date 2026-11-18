@@ -18,6 +18,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import Leaflet from 'leaflet'
 import 'leaflet-rotate'
+import Alerte from '@/components/interface/Alerte.vue'
+import Bouton from '@/components/interface/Bouton.vue'
 import 'leaflet/dist/leaflet.css'
 import type { Lieu } from '@/services/adresses'
 import type { PointDuTrace } from '@/services/itineraire'
@@ -77,7 +79,7 @@ const epingle = (genre: keyof typeof DESSIN_DANS_L_EPINGLE, libelle: string) =>
       `<span class="epingle epingle--${genre}">` +
       '<svg viewBox="0 0 28 40" width="28" height="40" aria-hidden="true" focusable="false">' +
       `<path class="corps-epingle" d="${FORME_EPINGLE}" />${DESSIN_DANS_L_EPINGLE[genre]}</svg>` +
-      `<span class="fr-sr-only">${libelle}</span></span>`,
+      `<span class="visuellement-cache">${libelle}</span></span>`,
   })
 
 /**
@@ -95,7 +97,7 @@ const repereDeLaPersonneIcone = () =>
       '<rect class="carrosserie-vous" x="7" y="5" width="18" height="22" rx="7" />' +
       '<path class="vitre-vous" d="M10.5 12 Q16 8.5 21.5 12 L20.5 16 L11.5 16 Z" />' +
       '<path class="vitre-vous" d="M12 22 L20 22 L20.5 24 Q16 25.5 11.5 24 Z" /></svg>' +
-      '<span class="fr-sr-only">Votre position</span></span>',
+      '<span class="visuellement-cache">Votre position</span></span>',
   })
 
 const TOUCHES_DE_DEPLACEMENT = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
@@ -149,7 +151,7 @@ function dessinerLeTrajet(): void {
   if (!aUnTrajet.value) return
   const pointsDuTrace = props.trace.map((point) => Leaflet.latLng(point.latitude, point.longitude))
   const ligneDuTrajet = Leaflet.polyline(pointsDuTrace, {
-    color: '#000091',
+    color: '#1f7a4d',
     weight: 5,
     interactive: false,
   }).addTo(coucheDuTrajet)
@@ -455,16 +457,14 @@ const nomDeLaCarte = () =>
 <template>
   <div class="carte-complete">
     <div id="etat-carte" role="status" class="etat-carte">
-      <DsfrAlert
+      <Alerte
         v-if="!enLigne && carteHorsConnexion"
         type="info"
-        small
         description="Hors connexion : seuls les morceaux de carte déjà vus s’affichent. Les zones jamais regardées restent vides. Les étapes de votre trajet restent lisibles plus bas."
       />
-      <DsfrAlert
+      <Alerte
         v-else-if="!enLigne"
         type="info"
-        small
         description="Carte indisponible sans connexion. Les étapes de votre trajet restent lisibles plus bas."
       />
     </div>
@@ -478,7 +478,7 @@ const nomDeLaCarte = () =>
       :aria-modal="pleinEcran ? 'true' : undefined"
       :aria-label="pleinEcran ? 'Carte en plein écran' : undefined"
     >
-      <p id="aide-carte" class="fr-sr-only">
+      <p id="aide-carte" class="visuellement-cache">
         Déplacez la carte avec le doigt ou les flèches du clavier. Zoomez avec les boutons, ou les
         touches + et −. Votre position reste sur ce téléphone. Quand elle vous suit, la carte tourne
         dans le sens de la marche, sauf si vous gardez le nord en haut. Gardez les yeux sur la route
@@ -493,64 +493,56 @@ const nomDeLaCarte = () =>
         :aria-label="nomDeLaCarte()"
         aria-describedby="aide-carte"
       ></div>
-      <p id="annonce-suivi" role="status" class="fr-sr-only">{{ messageDuSuivi }}</p>
+      <p id="annonce-suivi" role="status" class="visuellement-cache">{{ messageDuSuivi }}</p>
       <!-- Posés sur la carte : la distance restante en bas, les boutons à droite. -->
       <div v-if="erreurDuSuivi || avancement || $slots['sur-la-carte']" class="infos-carte">
         <!-- Ce que l'écran pose sur la carte (ex. : durée et distance du trajet). -->
         <slot name="sur-la-carte" :distance-restante-affichee="Boolean(avancement)" />
-        <DsfrAlert v-if="erreurDuSuivi" type="error" small :description="erreurDuSuivi" />
+        <Alerte v-if="erreurDuSuivi" type="error" :description="erreurDuSuivi" />
         <!-- Discret, à droite : seule la distance restante se voit (ex. : « 22 km »). -->
         <div v-if="avancement" id="avancement-trajet" class="avancement">
-          <p class="fr-text--lg fr-mb-0 panneau-distance-restante">
-            <span class="fr-sr-only">Il vous reste </span
+          <p class="texte-grand marge-bas-0 panneau-distance-restante">
+            <span class="visuellement-cache">Il vous reste </span
             ><strong>{{ enDistanceLisible(avancement.distanceRestanteMetres) }}</strong
-            ><span class="fr-sr-only"> jusqu’à l’arrivée.</span>
+            ><span class="visuellement-cache"> jusqu’à l’arrivée.</span>
           </p>
-          <DsfrAlert
+          <Alerte
             v-if="avancement.horsDuTrajet"
             type="warning"
-            small
-            class="fr-mt-1w"
+            class="marge-haut-2"
             :description="`Vous êtes à ${enDistanceLisible(avancement.ecartAuTrajetMetres)} du trajet prévu. Rejoignez-le dès que possible, ou calculez un nouvel itinéraire.`"
           />
         </div>
       </div>
-      <!-- Boutons à icône seule : leur intitulé est lu par les lecteurs d'écran et affiché au survol. -->
+      <!-- Boutons compacts (icône seule) : leur nom complet est lu par les lecteurs d'écran et affiché au survol. -->
       <div class="commandes-carte">
-        <DsfrButton
+        <Bouton
           v-if="pleinEcran || (suiviActif && !carteCentreeSurLaPersonne)"
           type="button"
-          size="lg"
-          icon-only
-          icon="fr-icon-focus-3-line"
-          label="Me recentrer sur ma position"
+          icone="recentrer"
+          icone-seule
+          label="Recentrer"
           aria-label="Me recentrer sur ma position"
           @click="recentrerSurLaPersonne"
         />
-        <DsfrButton
+        <Bouton
           type="button"
-          secondary
-          size="lg"
-          icon-only
-          :icon="suiviActif ? 'fr-icon-close-circle-line' : 'fr-icon-map-pin-2-line'"
-          :label="suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'"
+          variante="secondaire"
+          :icone="suiviActif ? 'arreter' : 'position'"
+          icone-seule
+          :label="suiviActif ? 'Arrêter' : 'Suivre'"
           :aria-label="
             suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'
           "
           @click="basculerLeSuivi"
         />
-        <DsfrButton
+        <Bouton
           v-if="suiviActif"
           type="button"
-          secondary
-          size="lg"
-          icon-only
-          icon="fr-icon-compass-3-line"
-          :label="
-            sensDeLaMarche
-              ? 'Garder le nord en haut de la carte'
-              : 'Tourner la carte dans le sens de la marche'
-          "
+          variante="secondaire"
+          icone="boussole"
+          icone-seule
+          :label="sensDeLaMarche ? 'Nord en haut' : 'Tourner'"
           :aria-label="
             sensDeLaMarche
               ? 'Garder le nord en haut de la carte'
@@ -558,47 +550,43 @@ const nomDeLaCarte = () =>
           "
           @click="basculerLeSensDeLaCarte"
         />
-        <DsfrButton
+        <Bouton
           type="button"
-          secondary
-          size="lg"
-          icon-only
-          icon="fr-icon-zoom-in-line"
-          label="Zoomer sur la carte"
+          variante="secondaire"
+          icone="zoomPlus"
+          icone-seule
+          label="Zoomer"
           aria-label="Zoomer sur la carte"
           @click="zoomer"
         />
-        <DsfrButton
+        <Bouton
           type="button"
-          secondary
-          size="lg"
-          icon-only
-          icon="fr-icon-zoom-out-line"
-          label="Dézoomer la carte"
+          variante="secondaire"
+          icone="zoomMoins"
+          icone-seule
+          label="Dézoomer"
           aria-label="Dézoomer la carte"
           @click="dezoomer"
         />
-        <DsfrButton
+        <Bouton
           v-if="pleinEcran"
           id="bouton-quitter-plein-ecran"
           type="button"
-          secondary
-          size="lg"
-          icon-only
-          icon="fr-icon-collapse-line"
-          label="Quitter le plein écran"
+          variante="secondaire"
+          icone="quitterPleinEcran"
+          icone-seule
+          label="Quitter"
           aria-label="Quitter le plein écran"
           @click="quitterLePleinEcran"
         />
-        <DsfrButton
+        <Bouton
           v-else
           id="bouton-plein-ecran"
           type="button"
-          secondary
-          size="lg"
-          icon-only
-          icon="fr-icon-fullscreen-line"
-          label="Afficher la carte en plein écran"
+          variante="secondaire"
+          icone="pleinEcran"
+          icone-seule
+          label="Plein écran"
           aria-label="Afficher la carte en plein écran"
           @click="entrerEnPleinEcran"
         />
@@ -627,14 +615,14 @@ const nomDeLaCarte = () =>
 .zone-carte--plein-ecran {
   position: fixed;
   z-index: 1800;
-  background: var(--background-default-grey);
+  background: var(--fond);
 }
 .carte-trajet {
   position: absolute;
   inset: 0;
 }
 .carte-trajet:focus-visible {
-  outline: 2px solid #0a76f6;
+  outline: 3px solid var(--focus);
   outline-offset: -4px;
 }
 /* Fonds blancs sous les éléments posés sur la carte : ils restent lisibles sur toutes les rues. */
@@ -651,8 +639,8 @@ const nomDeLaCarte = () =>
   gap: 0.5rem;
 }
 /* Côte à côte à droite (ex. : « 45 min » puis « 22 km ») ; une alerte prend toute la largeur. */
-.infos-carte > .fr-alert,
-.avancement:has(.fr-alert) {
+.infos-carte > .alerte,
+.avancement:has(.alerte) {
   flex-basis: 100%;
 }
 .avancement {
@@ -660,12 +648,12 @@ const nomDeLaCarte = () =>
   flex-direction: column;
   align-items: flex-end;
 }
-.avancement > .fr-alert {
+.avancement > .alerte {
   align-self: stretch;
 }
 .panneau-distance-restante {
   padding: 0.5rem 0.75rem;
-  background: var(--background-default-grey);
+  background: var(--fond);
   box-shadow: 0 2px 6px rgb(0 0 18 / 16%);
 }
 .commandes-carte {
@@ -677,7 +665,7 @@ const nomDeLaCarte = () =>
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.25rem;
-  background: var(--background-default-grey);
+  background: var(--fond);
   box-shadow: 0 2px 6px rgb(0 0 18 / 16%);
 }
 /* Épingles du départ et de l'arrivée : bordure blanche pour rester visibles sur toutes les rues. */
@@ -686,17 +674,17 @@ const nomDeLaCarte = () =>
   filter: drop-shadow(0 1px 2px rgb(0 0 18 / 40%));
 }
 .carte-trajet :deep(.corps-epingle) {
-  stroke: var(--background-default-grey);
+  stroke: var(--fond);
   stroke-width: 1.5;
 }
 .carte-trajet :deep(.epingle--depart .corps-epingle) {
-  fill: var(--background-action-high-blue-france);
+  fill: var(--vert-route);
 }
 .carte-trajet :deep(.epingle--arrivee .corps-epingle) {
-  fill: var(--background-flat-red-marianne);
+  fill: var(--erreur);
 }
 .carte-trajet :deep(.dessin-epingle) {
-  fill: var(--background-default-grey);
+  fill: var(--fond);
 }
 /* Repère de la personne : le véhicule (24 px) est centré sur sa position. */
 .carte-trajet :deep(.repere-vous) {
@@ -712,12 +700,12 @@ const nomDeLaCarte = () =>
   transition: transform 0.3s ease-out;
 }
 .carte-trajet :deep(.carrosserie-vous) {
-  fill: var(--background-action-high-blue-france);
-  stroke: var(--background-default-grey);
+  fill: var(--vert-route);
+  stroke: var(--fond);
   stroke-width: 2;
 }
 .carte-trajet :deep(.vitre-vous) {
-  fill: var(--background-default-grey);
+  fill: var(--fond);
 }
 @media (prefers-reduced-motion: reduce) {
   .carte-trajet :deep(.vehicule-vous) {

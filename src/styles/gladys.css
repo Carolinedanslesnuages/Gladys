@@ -1,0 +1,128 @@
+/* Apparence propre à GLADYS : vert route, police du système, contrastes d'au moins 4,5:1 (RGAA 3.2). */
+:root {
+  --vert-route: #1f7a4d; /* 5,3:1 sur blanc ; texte blanc dessus : 5,3:1 */
+  --vert-route-fonce: #14573a;
+  --vert-route-pale: #e6f2ec;
+  --texte: #1a1a1a;
+  --texte-discret: #4a4a4a;
+  --fond: #ffffff;
+  --bordure: #6b6b6b;
+  --bordure-legere: #c9c9c9;
+  --erreur: #b42318;
+  --erreur-pale: #fdecea;
+  --attention-texte: #5c3b00;
+  --attention-pale: #fff4e0;
+  --attention-bordure: #8a5a00;
+  --focus: #0b4fa8;
+  --cible-minimale: 2.75rem; /* 44 px */
+  --police: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--police);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--texte);
+  background: var(--fond);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  line-height: 1.25;
+  margin: 0 0 0.75rem;
+}
+.titre-5 {
+  font-size: 1.375rem;
+}
+.titre-6 {
+  font-size: 1.125rem;
+}
+
+a {
+  color: var(--vert-route-fonce);
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.visuellement-cache {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.conteneur {
+  width: 100%;
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.texte-grand {
+  font-size: 1.25rem;
+}
+.texte-petit {
+  font-size: 0.875rem;
+}
+.texte-gras {
+  font-weight: 700;
+}
+
+/* Espacements, par pas de 0,25 rem. */
+.marge-haut-1 { margin-top: 0.25rem; }
+.marge-haut-2 { margin-top: 0.5rem; }
+.marge-haut-6 { margin-top: 1.5rem; }
+.marge-haut-8 { margin-top: 2rem; }
+.marge-bas-0 { margin-bottom: 0; }
+.marge-bas-1 { margin-bottom: 0.25rem; }
+.marge-bas-2 { margin-bottom: 0.5rem; }
+.marge-bas-4 { margin-bottom: 1rem; }
+.marge-bas-6 { margin-bottom: 1.5rem; }
+.marge-bas-8 { margin-bottom: 2rem; }
+.marge-gauche-2 { margin-left: 0.5rem; }
+.marge-verticale-4 { margin-top: 1rem; margin-bottom: 1rem; }
+.marge-verticale-12 { margin-top: 3rem; margin-bottom: 3rem; }
+.sans-marge { margin: 0; }
+.sans-remplissage { padding: 0; }
+.remplissage-6 { padding: 1.5rem; }
+
+/* Rangée de boutons : à la file, qui passent à la ligne sur un écran étroit. */
+.groupe-boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
