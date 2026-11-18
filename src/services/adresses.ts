@@ -54,3 +54,10 @@ export async function lieuLePlusProche(latitude: number, longitude: number): Pro
   const lieuxProches = await interrogerBaseAdresse(`${SERVICE_ADRESSES}/reverse?${parametres}`)
   return lieuxProches[0] ?? null
 }
+
+/** Nom d'une commune d'après son code officiel (INSEE), ou `null` si le service ne la connaît pas. */
+export async function nomDeCommune(codeCommune: string): Promise<string | null> {
+  const parametres = new URLSearchParams({ q: codeCommune, type: 'municipality', citycode: codeCommune, limit: '1' })
+  const communes = await interrogerBaseAdresse(`${SERVICE_ADRESSES}/search?${parametres}`)
+  return communes[0]?.libelle ?? null
+}

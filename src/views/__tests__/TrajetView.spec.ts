@@ -419,6 +419,108 @@ describe('Écran « Préparer mon trajet »', () => {
     })
   })
 
+  describe('Story #5 : voir et comparer le trajet avant de partir', () => {
+    const troncon = (metres: number, codeCommune: string, numero: string, nomDeRue = '') => ({
+      distance: metres,
+      attributes: {
+        insee_commune_gauche: codeCommune,
+        vitesse_moyenne_vl: 80,
+        name: { cpx_numero: numero, nom_1_gauche: nomDeRue },
+      },
+    })
+    const reponseIgn = (troncons: ReturnType<typeof troncon>[]) =>
+      new Response(
+        JSON.stringify({
+          distance: troncons.reduce((total, tronconDuTrajet) => total + tronconDuTrajet.distance, 0),
+          portions: [{ steps: troncons }],
+        }),
+      )
+    /** Le plus court : 10 km dont 4 km sur la D502. */
+    const plusCourt = () => reponseIgn([troncon(4000, '38544', 'D502'), troncon(6000, '38001', 'C3')])
+    /** Par les villages : 12,5 km sans départementale ; deux tronçons de la C3 qui se suivent. */
+    const parLesVillages = () =>
+      reponseIgn([
+        troncon(500, '38544', '', 'Rue de la Gare'),
+        troncon(2000, '38544', 'C3'),
+        troncon(1000, '38544', 'C3'),
+        troncon(9000, '38001', 'C5'),
+      ])
+    const nomsDesCommunes: Record<string, string> = { '38544': 'Vienne', '38001': 'Les Abrets' }
+
+    async function calculerAvecEtapes(ecran: Ecran): Promise<void> {
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      fetchSimule.mockImplementation((adresse) => {
+        if (adresse.includes('/navigation/')) {
+          return Promise.resolve(adresse.includes('departementale') ? parLesVillages() : plusCourt())
+        }
+        const nom = nomsDesCommunes[new URL(adresse).searchParams.get('citycode') ?? '']
+        return Promise.resolve(reponseBaseAdresse(nom ? [nom] : []))
+      })
+      await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
+      await flushPromises()
+    }
+
+    const etapes = (ecran: Ecran) => ecran.findAll('#etapes-trajet li').map((etape) => etape.text().replace(/\s+/g, ' '))
+    const comparaison = (ecran: Ecran) => ecran.find('#comparaison-trajet')
+
+    it('Critère 1 : liste écrite des étapes, dans l’ordre (village, route, distance)', async () => {
+      const ecran = monter()
+      await calculerAvecEtapes(ecran)
+      expect(ecran.find('#etapes-trajet').element.tagName).toBe('OL')
+      expect(etapes(ecran)).toEqual(['Vienne — Rue de la Gare — 0,5 km', 'Vienne — C3 — 3 km', 'Les Abrets — C5 — 9 km'])
+      ecran.unmount()
+    })
+
+    it('Critère 2 : les passages sur départementale portent la mention écrite « Départementale »', async () => {
+      // À 20 % de détour accepté, le trajet par les villages est refusé : on garde le plus court, avec la D502.
+      simulerLocalStorage({ 'leon:seuil-detour': '20' })
+      const ecran = monter()
+      await calculerAvecEtapes(ecran)
+      expect(etapes(ecran)).toEqual(['Vienne — D502 — 4 km Départementale', 'Les Abrets — C3 — 6 km'])
+      ecran.unmount()
+    })
+
+    it('Critère 3 : compare avec le trajet le plus court et donne la différence de temps à ma vitesse', async () => {
+      const ecran = monter()
+      await calculerAvecEtapes(ecran)
+      // À 45 km/h : 12,5 km = 16 min 40 (17 min) ; 10 km = 13 min 20 (13 min).
+      expect(comparaison(ecran).text()).toContain('Trajet le plus court sans autoroute10 km, 13 min')
+      expect(comparaison(ecran).text()).toContain('4 min de plus, 2,5 km de plus')
+      expect(ecran.find('#annonce-comparaison').attributes('role')).toBe('status')
+      expect(ecran.find('#annonce-comparaison').text()).toBe(
+        'Trajet le plus court : 10 km, 13 min. Votre trajet : 4 min de plus, 2,5 km de plus.',
+      )
+      // À 30 km/h : 25 min contre 20 min.
+      await ecran.find('#vitesse-habituelle').setValue('30')
+      expect(comparaison(ecran).text()).toContain('5 min de plus, 2,5 km de plus')
+      ecran.unmount()
+    })
+
+    it('Critère 3 : dit simplement quand le trajet retenu est déjà le plus court', async () => {
+      simulerLocalStorage({ 'leon:seuil-detour': '20' })
+      const ecran = monter()
+      await calculerAvecEtapes(ecran)
+      expect(comparaison(ecran).text()).toBe('Votre trajet est déjà le trajet le plus court sans autoroute.')
+      ecran.unmount()
+    })
+
+    it('aucune violation d’accessibilité automatique (comparaison et étapes, avec départementale)', async () => {
+      const ecran = monter()
+      await calculerAvecEtapes(ecran)
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecran.unmount()
+      setActivePinia(createPinia())
+      simulerLocalStorage({ 'leon:seuil-detour': '20' })
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const ecranAvecDepartementale = monter()
+      await calculerAvecEtapes(ecranAvecDepartementale)
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecranAvecDepartementale.unmount()
+    })
+  })
+
   it('aucune violation d’accessibilité automatique (propositions, question d’accord, trajets récents)', async () => {
     const ecran = monter()
     await preparerTrajet(ecran, 'Lyon', 'Vienne')

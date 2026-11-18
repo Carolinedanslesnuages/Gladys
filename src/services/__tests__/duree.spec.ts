@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { dateDeDepart, dureeEnMinutes, formaterDuree, formaterHeure, heureDArrivee, vitesseValide } from '../duree'
+import {
+  dateDeDepart,
+  dureeEnMinutes,
+  formaterDuree,
+  formaterEcartDeDuree,
+  formaterHeure,
+  heureDArrivee,
+  vitesseValide,
+} from '../duree'
 
 describe('Durée d’un trajet en voiture sans permis', () => {
   it('Critère 1 : 45 km/h au plus, et la vitesse de la route si elle est plus basse', () => {
@@ -32,6 +40,13 @@ describe('Durée d’un trajet en voiture sans permis', () => {
     expect(formaterDuree(85)).toBe('1 h 25 min')
     expect(formaterDuree(120)).toBe('2 h')
     expect(formaterDuree(0.2)).toBe('1 min')
+  })
+
+  it('Story #5 : écrit l’écart de temps avec le trajet le plus court', () => {
+    expect(formaterEcartDeDuree(42, 30)).toBe('12 min de plus')
+    expect(formaterEcartDeDuree(95, 30)).toBe('1 h 5 min de plus')
+    expect(formaterEcartDeDuree(27, 30)).toBe('3 min de moins')
+    expect(formaterEcartDeDuree(30.2, 29.9)).toBe('même durée')
   })
 
   it('Critère 2 : départ 8 h 00 et trajet de 20 min, arrivée à 8 h 20', () => {
