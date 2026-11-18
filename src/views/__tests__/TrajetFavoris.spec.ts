@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import VueDsfr from '@gouvminint/vue-dsfr'
 import TrajetView from '../TrajetView.vue'
 import { simulerLocalStorage } from '@/__tests__/stockage-simule'
 import { violationsAccessibilite } from '@/__tests__/accessibilite'
@@ -11,7 +10,7 @@ import type { Itineraire, ResultatItineraire } from '@/services/itineraire'
 const definirEnLigne = (valeur: boolean) =>
   Object.defineProperty(navigator, 'onLine', { value: valeur, configurable: true })
 
-const monter = () => mount(TrajetView, { global: { plugins: [VueDsfr] }, attachTo: document.body })
+const monter = () => mount(TrajetView, { attachTo: document.body })
 type Ecran = ReturnType<typeof monter>
 
 const boutonNomme = (ecran: Ecran, intitule: string) =>

@@ -1,5 +1,6 @@
 {
   "type": "mobile",
+  "dsfr": false,
   "personnaliser": [
     "PROJET.md",
     "README.md",

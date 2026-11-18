@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
+import Alerte from '@/components/interface/Alerte.vue'
 
 /** Prévient quand l'appareil n'a plus de réseau : l'application continue de fonctionner. */
 const enLigne = ref(navigator.onLine)
@@ -16,6 +17,10 @@ onUnmounted(() => {
 
 <template>
   <div role="status">
-    <DsfrNotice v-if="!enLigne" title="Hors connexion : l’application continue de fonctionner, vos saisies restent sur cet appareil." />
+    <Alerte
+      v-if="!enLigne"
+      type="info"
+      description="Hors connexion : l’application continue de fonctionner, vos saisies restent sur cet appareil."
+    />
   </div>
 </template>

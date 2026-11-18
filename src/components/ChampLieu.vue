@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { ErreurReseau, rechercherLieux, type Lieu } from '@/services/adresses'
+import Bouton from '@/components/interface/Bouton.vue'
+import ChampSaisie from '@/components/interface/ChampSaisie.vue'
 
 /**
  * Champ « adresse ou commune » : pendant la saisie, propose les lieux trouvés par la Base Adresse
@@ -91,25 +93,23 @@ onUnmounted(() => clearTimeout(minuteurRecherche))
 </script>
 
 <template>
-  <div class="fr-mb-3w">
-    <DsfrInputGroup
+  <div class="marge-bas-6">
+    <ChampSaisie
       :id="id"
       :model-value="texteTape"
       :label="label"
-      label-visible
-      :hint="indication ?? 'Une adresse ou le nom d’une commune, puis choisissez dans la liste'"
-      :error-message="messageErreur"
-      :valid-message="messageValide"
+      :indication="indication ?? 'Une adresse ou le nom d’une commune, puis choisissez dans la liste'"
+      :message-erreur="messageErreur"
+      :message-reussite="messageValide"
       :disabled="!enLigne"
       required
       autocomplete="off"
-      wrapper-class="fr-mb-1w"
       @update:model-value="saisir"
     />
-    <p role="status" class="fr-sr-only">{{ annonce }}</p>
-    <ul v-if="propositions.length > 0" class="fr-p-0 fr-m-0 propositions" :aria-label="`Propositions pour : ${label}`">
+    <p role="status" class="visuellement-cache">{{ annonce }}</p>
+    <ul v-if="propositions.length > 0" class="sans-remplissage sans-marge propositions" :aria-label="`Propositions pour : ${label}`">
       <li v-for="lieu in propositions" :key="lieu.libelle">
-        <DsfrButton type="button" tertiary size="lg" :label="lieu.libelle" class="proposition" @click="choisir(lieu)" />
+        <Bouton type="button" variante="discret" :label="lieu.libelle" class="proposition" @click="choisir(lieu)" />
       </li>
     </ul>
     <!-- Proposé tant que rien n'est tapé (ex. : les trajets récents sous la barre « Où allez-vous ? »). -->
@@ -123,6 +123,7 @@ onUnmounted(() => clearTimeout(minuteurRecherche))
 }
 .proposition {
   width: 100%;
+  justify-content: flex-start;
   text-align: left;
 }
 </style>

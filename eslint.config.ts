@@ -24,13 +24,21 @@ export default defineConfigWithVueTs(
   // Accessibilité vérifiée à l'écriture (images, étiquettes, clavier, ARIA…) : la CI échoue sinon.
   ...pluginVueA11y.configs['flat/recommended'],
   {
-    name: 'app/accessibilite-dsfr',
+    name: 'app/accessibilite',
     rules: {
-      // Le DSFR relie l'étiquette au champ par for/id (conforme RGAA) : l'imbrication n'est pas exigée.
+      // Nos champs relient l'étiquette au champ par for/id (conforme RGAA) : l'imbrication n'est pas exigée.
       'vuejs-accessibility/label-has-for': ['error', { required: { some: ['nesting', 'id'] } }],
     },
   },
   vueTsConfigs.recommended,
+  {
+    name: 'app/composants-de-base',
+    files: ['src/components/interface/*.vue'],
+    rules: {
+      // Composants de base de GLADYS (Bouton, Alerte…) : un mot français suffit à les nommer.
+      'vue/multi-word-component-names': 'off',
+    },
+  },
 
   {
     ...pluginVitest.configs.recommended,

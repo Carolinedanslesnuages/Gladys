@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import VueDsfr from '@gouvminint/vue-dsfr'
 import RelevesView from '../RelevesView.vue'
 import { simulerLocalStorage } from '@/__tests__/stockage-simule'
 import { violationsAccessibilite } from '@/__tests__/accessibilite'
 
-const monter = () => mount(RelevesView, { global: { plugins: [VueDsfr] }, attachTo: document.body })
+const monter = () => mount(RelevesView, { attachTo: document.body })
 
 describe('Écran des relevés', () => {
   beforeEach(() => {
@@ -41,7 +40,7 @@ describe('Écran des relevés', () => {
 
   it('explique comment installer l’application', async () => {
     const wrapper = monter()
-    await wrapper.find('button[aria-expanded]').trigger('click')
+    await wrapper.find('details > summary').trigger('click')
     expect(wrapper.text()).toContain('« Sur l’écran d’accueil »')
     wrapper.unmount()
   })

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import VueDsfr from '@gouvminint/vue-dsfr'
 import App from '@/App.vue'
 import router from '@/router'
 import { simulerLocalStorage } from './stockage-simule'
@@ -27,7 +26,7 @@ describe('Nom de l’application : GLADYS', () => {
     await router.push(chemin)
     await router.isReady()
     const application = mount(App, {
-      global: { plugins: [VueDsfr, router] },
+      global: { plugins: [router] },
       attachTo: document.body,
     })
     await application.vm.$nextTick()
@@ -40,7 +39,7 @@ describe('Nom de l’application : GLADYS', () => {
     await router.push('/')
     await router.isReady()
     const application = mount(App, {
-      global: { plugins: [VueDsfr, router] },
+      global: { plugins: [router] },
       attachTo: document.body,
     })
     await application.vm.$nextTick()
@@ -57,7 +56,7 @@ describe('Nom de l’application : GLADYS', () => {
     await router.push('/releves')
     await router.isReady()
     const application = mount(App, {
-      global: { plugins: [VueDsfr, router] },
+      global: { plugins: [router] },
       attachTo: document.body,
     })
     await application.vm.$nextTick()

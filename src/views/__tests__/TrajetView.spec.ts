@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import VueDsfr from '@gouvminint/vue-dsfr'
 import TrajetView from '../TrajetView.vue'
 import { simulerLocalStorage } from '@/__tests__/stockage-simule'
 import { violationsAccessibilite } from '@/__tests__/accessibilite'
@@ -38,7 +37,7 @@ const simulerPosition = (accordee: boolean) =>
 
 let fetchSimule: ReturnType<typeof vi.fn<(adresse: string) => Promise<Response>>>
 
-const monter = () => mount(TrajetView, { global: { plugins: [VueDsfr] }, attachTo: document.body })
+const monter = () => mount(TrajetView, { attachTo: document.body })
 type Ecran = ReturnType<typeof monter>
 
 async function taper(ecran: Ecran, idChamp: string, texte: string): Promise<void> {
@@ -118,7 +117,7 @@ describe('Écran « Préparer mon trajet »', () => {
 
     it('Demande #30 : plus de menu sur la carte ; « À propos » reste toujours affiché sous la carte', () => {
       const ecran = monter()
-      expect(ecran.find('#zone-carte .fr-icon-menu-fill').exists()).toBe(false)
+      expect(ecran.find('#zone-carte [aria-haspopup]').exists()).toBe(false)
       expect(ecran.findAll('button').some((bouton) => bouton.text() === 'Menu')).toBe(false)
       const aPropos = ecran.find('#bouton-a-propos')
       expect(aPropos.text()).toBe('À propos, accessibilité et relevés')
@@ -533,7 +532,7 @@ describe('Écran « Préparer mon trajet »', () => {
       expect(resume.text()).toContain('Arrivée vers')
       // Demande #30 : sur la carte, seuls la durée et les kilomètres se voient, l'heure d'arrivée est lue.
       expect(resume.find('strong').text()).toBe('32 min')
-      expect(resume.find('.fr-sr-only').text()).toMatch(/^\. Arrivée vers \d{1,2} h \d{2}\.$/)
+      expect(resume.find('.visuellement-cache').text()).toMatch(/^\. Arrivée vers \d{1,2} h \d{2}\.$/)
       expect(ecran.text()).not.toContain('Valider mon trajet')
       await boutonNomme(ecran, 'Voir le détail du trajet').trigger('click')
       expect(document.activeElement?.id).toBe('titre-itineraire')
