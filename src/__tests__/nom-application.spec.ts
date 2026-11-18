@@ -40,7 +40,7 @@ describe('Nom de l’application : GLADYS', () => {
     const application = mount(App, { global: { plugins: [VueDsfr, router] }, attachTo: document.body })
     await application.vm.$nextTick()
     const enTete = application.find('header')
-    expect(enTete.text()).toContain('Mes trajets en voiture sans permis, en toute sécurité')
+    expect(enTete.text()).toContain('Sans permis, en toute sécurité')
     expect(enTete.text()).not.toMatch(/gladys/i)
     application.unmount()
   })

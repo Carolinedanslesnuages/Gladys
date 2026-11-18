@@ -12,7 +12,7 @@ const liensRapides = [
 
 <template>
   <DsfrHeader
-    service-title="Mes trajets en voiture sans permis, en toute sécurité"
+    service-title="Sans permis, en toute sécurité"
     :logo-text="logoText"
     :quick-links="liensRapides"
     home-to="/"
