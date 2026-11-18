@@ -684,8 +684,11 @@ async function effacer(confirme: boolean): Promise<void> {
               <span v-else class="visuellement-cache"
                 >, {{ enKilometres(resultat.itineraire.distanceMetres) }} au total</span
               >
-              <span v-if="horairesEstimes" class="visuellement-cache"
-                >. Arrivée vers {{ horairesEstimes.arrivee }}.</span
+              <span v-if="horairesEstimes" class="arrivee-estimee"
+                ><span class="visuellement-cache">. </span> · Arrivée vers {{ horairesEstimes.arrivee }}<span
+                  class="visuellement-cache"
+                  >.</span
+                ></span
               >
             </p>
             <Bouton
