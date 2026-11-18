@@ -6,6 +6,7 @@
  */
 import { ErreurReseau, nomDeCommune, type Lieu } from '@/services/adresses'
 import type { Troncon } from '@/services/duree'
+import { avecLesVirages } from '@/services/consignes'
 
 const SERVICE_ITINERAIRE = 'https://data.geopf.fr/navigation/itineraire'
 
@@ -42,6 +43,9 @@ export const EVITEMENT_FORT_TRAFIC = JSON.stringify({
   value: IMPORTANCE_ROUTE_CALME,
 })
 
+/** Sens du virage à la fin d'une étape, pour la consigne de conduite. */
+export type Virage = 'droite' | 'gauche' | 'tout-droit' | 'demi-tour'
+
 /** Une étape du trajet, à lire avant de partir : un village, une route, une distance. */
 export interface Etape {
   /** Code officiel (INSEE) de la commune traversée, ou `null` s'il est inconnu. */
@@ -53,6 +57,10 @@ export interface Etape {
   /** Vrai : départementale à fort trafic, à éviter. Faux pour une départementale calme. */
   fortTrafic: boolean
   distanceMetres: number
+  /** Rang, dans le tracé, du point où l'étape se termine. Absent d'un trajet enregistré avant les consignes. */
+  rangFinDansLeTrace?: number
+  /** Virage à la fin de l'étape, vers la suivante ; `null` pour la dernière étape (l'arrivée). */
+  virageALaFin?: Virage | null
 }
 
 /** Un itinéraire calculé : sa distance totale et ce qu'il garde de départementale à fort trafic (en mètres). */
@@ -232,7 +240,7 @@ export function itineraireDepuisTroncons(
 
 /** Le résultat, avec les étapes du trajet retenu remplacées (le plus court les reçoit aussi s'il est retenu). */
 export function avecLesEtapesDuTrajetRetenu(resultat: ResultatItineraire, etapes: Etape[]): ResultatItineraire {
-  const itineraireRetenu = { ...resultat.itineraire, etapes }
+  const itineraireRetenu = { ...resultat.itineraire, etapes: avecLesVirages(etapes, resultat.itineraire.trace) }
   return {
     ...resultat,
     itineraire: itineraireRetenu,

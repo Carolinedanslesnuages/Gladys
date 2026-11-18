@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useRouter } from 'vue-router'
+import { useConduiteStore } from '@/stores/conduite'
 import ChampLieu from '@/components/ChampLieu.vue'
 import CarteTrajet from '@/components/CarteTrajet.vue'
 import MenuAPropos from '@/components/MenuAPropos.vue'
@@ -359,6 +361,14 @@ async function validerTrajet(): Promise<void> {
   await calculerMonItineraire()
 }
 
+/** « Démarrer le trajet » : suit la position (sur l'appareil seulement) et ouvre l'écran des consignes. */
+const routeur = useRouter()
+const magasinConduite = useConduiteStore()
+function demarrerLeTrajet(): void {
+  magasinConduite.demarrer()
+  void routeur?.push('/conduite')
+}
+
 /** Revenir sur la carte, en haut de l'écran, depuis le détail du trajet. */
 const voirLaCarte = () => document.getElementById('carte-trajet')?.focus()
 // Sous la carte, rien ne s'affiche tant que la personne ne le demande pas : la carte reste seule.
@@ -678,6 +688,14 @@ async function effacer(confirme: boolean): Promise<void> {
                 >. Arrivée vers {{ horairesEstimes.arrivee }}.</span
               >
             </p>
+            <Bouton
+              id="bouton-demarrer-trajet"
+              type="button"
+              icone="itineraire"
+              class="bouton-barre"
+              label="Démarrer le trajet"
+              @click="demarrerLeTrajet"
+            />
             <Bouton
               type="button"
               variante="discret"
@@ -1125,6 +1143,7 @@ async function effacer(confirme: boolean): Promise<void> {
 }
 .panneau-resume {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem 0.25rem 0.25rem 0.75rem;
