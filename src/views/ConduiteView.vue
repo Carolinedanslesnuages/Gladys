@@ -5,7 +5,8 @@ import { useRouter } from 'vue-router'
 import Alerte from '@/components/interface/Alerte.vue'
 import Bouton from '@/components/interface/Bouton.vue'
 import CarteTrajet from '@/components/CarteTrajet.vue'
-import { distanceLisible } from '@/services/consignes'
+import Icone, { type NomIcone } from '@/components/interface/Icone.vue'
+import { distanceLisible, type Consigne } from '@/services/consignes'
 import { useConduiteStore } from '@/stores/conduite'
 import { useItineraireStore } from '@/stores/itineraire'
 import { useVoixStore } from '@/stores/voix'
@@ -16,6 +17,15 @@ const { etat, consigne, consignesAbsentes, voixAbsente } = storeToRefs(magasinCo
 const { resultat } = storeToRefs(useItineraireStore())
 const magasinVoix = useVoixStore()
 const { active: voixActive, erreur: erreurVoix } = storeToRefs(magasinVoix)
+
+/** Pictogramme décoratif : le texte de la consigne dit déjà le sens du virage. */
+const pictogrammeDuVirage: Record<Consigne['virage'], NomIcone> = {
+  droite: 'virageDroite',
+  gauche: 'virageGauche',
+  'tout-droit': 'toutDroit',
+  'demi-tour': 'demiTour',
+  arrivee: 'arrivee',
+}
 
 const trajetAbsent = computed(() => !resultat.value)
 
@@ -108,6 +118,7 @@ onUnmounted(() => magasinConduite.arreter())
         :class="['bandeau-consigne', { 'bandeau-consigne--replie': texteMasque }]"
       >
         <h2 id="titre-consigne" class="visuellement-cache">Prochaine consigne</h2>
+        <Icone id="pictogramme-direction" :nom="pictogrammeDuVirage[consigne.virage]" class="pictogramme-direction" />
         <p id="consigne-en-cours" :class="['consigne', { 'visuellement-cache': texteMasque }]">{{ consigne.texte }}</p>
         <p id="distance-consigne" :class="['distance-consigne', { 'visuellement-cache': texteMasque }]">
           <span class="visuellement-cache">Distance : </span>{{ distanceLisible(consigne.distanceMetres) }}
@@ -184,6 +195,23 @@ onUnmounted(() => magasinConduite.arreter())
   padding: 0;
   height: 0.5rem;
   overflow: hidden;
+}
+.bandeau-consigne {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 1rem;
+  align-items: center;
+}
+.bandeau-consigne > h2,
+.bandeau-consigne > .consigne,
+.bandeau-consigne > .distance-consigne {
+  grid-column: 2;
+}
+.pictogramme-direction {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  width: clamp(3.5rem, 18vw, 6rem);
+  height: clamp(3.5rem, 18vw, 6rem);
 }
 /* Lisible d'un coup d'œil, même à 320 px de large : le texte revient à la ligne. */
 .consigne {

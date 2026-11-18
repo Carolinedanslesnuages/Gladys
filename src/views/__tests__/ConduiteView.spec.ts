@@ -76,6 +76,19 @@ describe('Écran de conduite', () => {
     ecran.unmount()
   })
 
+  it('montre un pictogramme du virage, décoratif, qui devient un drapeau à l’arrivée', async () => {
+    demarrer()
+    const ecran = await monterEnConduite()
+    surPosition({ coords: { latitude: 45, longitude: 4 } })
+    await flushPromises()
+    const droite = ecran.find('#pictogramme-direction path').attributes('d')
+    expect(ecran.find('#pictogramme-direction').attributes('aria-hidden')).toBe('true')
+    surPosition({ coords: { latitude: 45.0095, longitude: 4 } })
+    await flushPromises()
+    expect(ecran.find('#pictogramme-direction path').attributes('d')).not.toBe(droite)
+    ecran.unmount()
+  })
+
   it('met la consigne en gros caractères, avec un seul titre principal', async () => {
     demarrer()
     const ecran = await monterEnConduite()
