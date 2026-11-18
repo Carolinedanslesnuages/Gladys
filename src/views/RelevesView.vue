@@ -30,7 +30,7 @@ const dateLisible = (iso: string) => new Date(iso).toLocaleString('fr-FR', { dat
 
 <template>
   <div class="fr-container fr-my-6w">
-    <!-- Sans en-tête, ce lien ramène à la carte (et à son bouton « Menu »). -->
+    <!-- Sans en-tête, ce lien ramène à la carte (et à son bouton « À propos »). -->
     <RouterLink to="/" class="fr-link fr-icon-arrow-left-line fr-link--icon-left">Retour à la carte</RouterLink>
     <h1 class="fr-mt-2w">GLADYS</h1>
     <p>Exemple : des relevés saisis sur le terrain, même sans réseau. Ils restent sur cet appareil.</p>

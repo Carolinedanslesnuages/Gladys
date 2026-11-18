@@ -236,6 +236,29 @@ describe('Carte du trajet', () => {
         'Il vous reste 10,9 km jusqu’à l’arrivée.',
       )
       expect(ecran.find('#avancement-trajet').text()).not.toContain('du trajet prévu')
+      // Demande #30 : seul « 10,9 km » se voit ; la phrase entière reste lue par les lecteurs d'écran.
+      expect(ecran.find('#avancement-trajet strong').text()).toBe('10,9 km')
+      expect(
+        ecran.findAll('#avancement-trajet .fr-sr-only').map((morceau) => morceau.text()),
+      ).toEqual(['Il vous reste', 'jusqu’à l’arrivée.'])
+      ecran.unmount()
+    })
+
+    it('Demande #30 : dit à ce qui est posé sur la carte quand la distance restante s’affiche', async () => {
+      const ecran = mount(CarteTrajet, {
+        props: { trace, depart: lyon, arrivee: vienne, enLigne: true },
+        slots: {
+          'sur-la-carte': `<template #sur-la-carte="{ distanceRestanteAffichee }">
+            <p id="resume-pose">{{ distanceRestanteAffichee ? 'à côté' : 'seul' }}</p>
+          </template>`,
+        },
+        global: { plugins: [VueDsfr] },
+        attachTo: document.body,
+      })
+      expect(ecran.find('#resume-pose').text()).toBe('seul')
+      await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+      await recevoirPosition(ecran, 45.6, 4.95)
+      expect(ecran.find('#resume-pose').text()).toBe('à côté')
       ecran.unmount()
     })
 

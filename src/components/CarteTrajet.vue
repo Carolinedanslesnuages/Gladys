@@ -488,14 +488,14 @@ const nomDeLaCarte = () =>
       <!-- Posés sur la carte : la distance restante en bas, les boutons à droite. -->
       <div v-if="erreurDuSuivi || avancement || $slots['sur-la-carte']" class="infos-carte">
         <!-- Ce que l'écran pose sur la carte (ex. : durée et distance du trajet). -->
-        <slot name="sur-la-carte" />
+        <slot name="sur-la-carte" :distance-restante-affichee="Boolean(avancement)" />
         <DsfrAlert v-if="erreurDuSuivi" type="error" small :description="erreurDuSuivi" />
-        <div v-if="avancement" id="avancement-trajet" class="panneau-avancement">
-          <p class="fr-text--lg fr-mb-0">
-            <strong
-              >Il vous reste {{ enDistanceLisible(avancement.distanceRestanteMetres) }}</strong
-            >
-            jusqu’à l’arrivée.
+        <!-- Discret, à droite : seule la distance restante se voit (ex. : « 22 km »). -->
+        <div v-if="avancement" id="avancement-trajet" class="avancement">
+          <p class="fr-text--lg fr-mb-0 panneau-distance-restante">
+            <span class="fr-sr-only">Il vous reste </span
+            ><strong>{{ enDistanceLisible(avancement.distanceRestanteMetres) }}</strong
+            ><span class="fr-sr-only"> jusqu’à l’arrivée.</span>
           </p>
           <DsfrAlert
             v-if="avancement.horsDuTrajet"
@@ -636,10 +636,25 @@ const nomDeLaCarte = () =>
   bottom: 1.75rem;
   z-index: 1000;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-end;
   gap: 0.5rem;
 }
-.panneau-avancement {
+/* Côte à côte à droite (ex. : « 45 min » puis « 22 km ») ; une alerte prend toute la largeur. */
+.infos-carte > .fr-alert,
+.avancement:has(.fr-alert) {
+  flex-basis: 100%;
+}
+.avancement {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.avancement > .fr-alert {
+  align-self: stretch;
+}
+.panneau-distance-restante {
   padding: 0.5rem 0.75rem;
   background: var(--background-default-grey);
   box-shadow: 0 2px 6px rgb(0 0 18 / 16%);

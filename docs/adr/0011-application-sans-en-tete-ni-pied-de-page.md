@@ -24,3 +24,10 @@ L'en-tête et le pied de page DSFR sont faits pour un site. Sur téléphone, ils
 - Les mentions légales (éditeur, directeur de la publication, hébergeur) et l'adresse de contact
   sont **à compléter** avant l'ouverture au public.
 - GLADYS ne dépose aucun cookie : il n'y a pas de bandeau de consentement.
+
+## Révision (demande #30)
+- Le bouton « Menu » est **retiré de la carte**, jugée encombrée.
+- Le panneau « À propos » s'ouvre désormais par le bouton **« À propos, accessibilité et
+  relevés »**, toujours affiché sous la carte (jamais masqué), pour que la déclaration
+  d'accessibilité et les mentions légales restent atteignables depuis l'écran d'accueil.
+- Le focus revient sur ce bouton à la fermeture du panneau.

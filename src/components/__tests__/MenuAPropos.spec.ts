@@ -5,26 +5,27 @@ import router from '@/router'
 import MenuAPropos from '../MenuAPropos.vue'
 import { violationsAccessibilite } from '@/__tests__/accessibilite'
 
-const monter = () => mount(MenuAPropos, { global: { plugins: [VueDsfr, router] }, attachTo: document.body })
+const monter = () =>
+  mount(MenuAPropos, { global: { plugins: [VueDsfr, router] }, attachTo: document.body })
 type Ecran = ReturnType<typeof monter>
 
 async function ouvrir(ecran: Ecran): Promise<void> {
-  await ecran.find('#bouton-menu').trigger('click')
+  await ecran.find('#bouton-a-propos').trigger('click')
   await flushPromises()
 }
 const panneau = () => document.querySelector<HTMLDialogElement>('dialog.fr-modal')
 
-describe('Demande #26 : bouton « Menu » et panneau « À propos »', () => {
+describe('Demandes #26 et #30 : bouton « À propos » et son panneau', () => {
   afterEach(() => {
     vi.useRealTimers()
     document.body.innerHTML = ''
   })
 
-  it('le bouton « Menu » a un intitulé visible et annonce qu’il ouvre une fenêtre', () => {
+  it('le bouton « À propos » a un intitulé visible et annonce qu’il ouvre une fenêtre', () => {
     const ecran = monter()
-    const bouton = ecran.find('#bouton-menu')
+    const bouton = ecran.find('#bouton-a-propos')
     expect(bouton.element.tagName).toBe('BUTTON')
-    expect(bouton.text()).toBe('Menu')
+    expect(bouton.text()).toBe('À propos, accessibilité et relevés')
     expect(bouton.attributes('aria-haspopup')).toBe('dialog')
     expect(panneau()).toBeNull()
     ecran.unmount()
@@ -49,7 +50,9 @@ describe('Demande #26 : bouton « Menu » et panneau « À propos »', () => {
     // Bloc marque DSFR : « République » et « Française » sur deux lignes.
     expect(fenetre.querySelector('.fr-logo')?.textContent?.trim()).toBe('RépubliqueFrançaise')
     expect(fenetre.querySelector('.fr-logo br')).not.toBeNull()
-    const titres = Array.from(fenetre.querySelectorAll('h3')).map((titre) => titre.textContent?.trim())
+    const titres = Array.from(fenetre.querySelectorAll('h3')).map((titre) =>
+      titre.textContent?.trim(),
+    )
     expect(titres).toEqual([
       'Aller à',
       'Déclaration d’accessibilité',
@@ -64,7 +67,7 @@ describe('Demande #26 : bouton « Menu » et panneau « À propos »', () => {
     ecran.unmount()
   })
 
-  it('se ferme avec « Fermer », et le focus revient sur « Menu »', async () => {
+  it('se ferme avec « Fermer », et le focus revient sur le bouton « À propos »', async () => {
     const ecran = monter()
     await ouvrir(ecran)
     const fermer = Array.from(panneau()!.querySelectorAll('button')).find(
@@ -73,7 +76,7 @@ describe('Demande #26 : bouton « Menu » et panneau « À propos »', () => {
     fermer.click()
     await flushPromises()
     expect(panneau()).toBeNull()
-    expect(document.activeElement?.id).toBe('bouton-menu')
+    expect(document.activeElement?.id).toBe('bouton-a-propos')
     ecran.unmount()
   })
 
@@ -83,7 +86,7 @@ describe('Demande #26 : bouton « Menu » et panneau « À propos »', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
     expect(panneau()).toBeNull()
-    expect(document.activeElement?.id).toBe('bouton-menu')
+    expect(document.activeElement?.id).toBe('bouton-a-propos')
     ecran.unmount()
   })
 
