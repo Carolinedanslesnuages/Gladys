@@ -16,3 +16,4 @@
 - #4 Connaître mon vrai temps de trajet — [fiche](revues/story-4-connaitre-mon-vrai-temps-de-trajet.md)
 - #5 Voir et comparer le trajet avant de partir — [fiche](revues/story-5-voir-et-comparer-le-trajet-avant-de-part.md)
 - #11 Changer le nom — [fiche](revues/story-11-changer-le-nom.md)
+- #16 Voir l'itinéraire sur une carte (mode libre) — [fiche](revues/libre-16-je-veux-voir-l-itineraire.md)

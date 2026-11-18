@@ -521,6 +521,77 @@ describe('Écran « Préparer mon trajet »', () => {
     })
   })
 
+  describe('Demande #16 : voir l’itinéraire sur une carte', () => {
+    const reponseAvecTrace = (coordonnees: number[][]) =>
+      new Response(
+        JSON.stringify({
+          distance: 12500,
+          geometry: { type: 'LineString', coordinates: coordonnees },
+          portions: [{ steps: [{ distance: 12500, attributes: { name: { cpx_numero: 'C3' } } }] }],
+        }),
+      )
+    const traceRetenu = [
+      [4.85, 45.75],
+      [4.95, 45.6],
+      [4.87, 45.52],
+    ]
+
+    async function calculerAvecTrace(ecran: Ecran): Promise<void> {
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      fetchSimule.mockImplementation((adresse) => {
+        if (!adresse.includes('/navigation/')) return Promise.resolve(reponseBaseAdresse([]))
+        // Le trajet qui évite les départementales est retenu ; le plus court a un autre tracé.
+        return Promise.resolve(
+          adresse.includes('departementale')
+            ? reponseAvecTrace(traceRetenu)
+            : reponseAvecTrace([
+                [4.85, 45.75],
+                [4.87, 45.52],
+              ]),
+        )
+      })
+      await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
+      await flushPromises()
+    }
+
+    it('affiche la carte du trajet retenu au-dessus de la liste des étapes', async () => {
+      const ecran = monter()
+      await calculerAvecTrace(ecran)
+      const carte = ecran.find('#carte-trajet')
+      expect(carte.attributes('aria-label')).toBe('Carte du trajet de Lyon à Vienne')
+      expect(carte.findAll('path')).toHaveLength(1)
+      expect(carte.text()).toContain('Départ')
+      expect(carte.text()).toContain('Arrivée')
+      const etapes = ecran.find('#etapes-trajet').element
+      expect(carte.element.compareDocumentPosition(etapes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      ecran.unmount()
+    })
+
+    it('sans réseau, dit « Carte indisponible sans connexion » et garde les étapes lisibles', async () => {
+      const ecran = monter()
+      await calculerAvecTrace(ecran)
+      definirEnLigne(false)
+      window.dispatchEvent(new Event('offline'))
+      await flushPromises()
+      expect(ecran.find('#carte-trajet').exists()).toBe(false)
+      expect(ecran.find('#etat-carte').text()).toContain('Carte indisponible sans connexion')
+      expect(ecran.findAll('#etapes-trajet li')).toHaveLength(1)
+      ecran.unmount()
+    })
+
+    it('aucune violation d’accessibilité automatique (carte, puis message sans réseau)', async () => {
+      const ecran = monter()
+      await calculerAvecTrace(ecran)
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      definirEnLigne(false)
+      window.dispatchEvent(new Event('offline'))
+      await flushPromises()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecran.unmount()
+    })
+  })
+
   it('aucune violation d’accessibilité automatique (propositions, question d’accord, trajets récents)', async () => {
     const ecran = monter()
     await preparerTrajet(ecran, 'Lyon', 'Vienne')

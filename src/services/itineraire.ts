@@ -44,6 +44,14 @@ export interface Itineraire {
   troncons: Troncon[]
   /** Ses étapes, dans l'ordre : les tronçons qui se suivent sur la même route et dans le même village n'en font qu'une. */
   etapes: Etape[]
+  /** Son tracé, du départ à l'arrivée, pour la carte ; vide si le service ne l'a pas donné. */
+  trace: PointDuTrace[]
+}
+
+/** Un point du tracé, en degrés. */
+export interface PointDuTrace {
+  latitude: number
+  longitude: number
 }
 
 interface AttributsDuTroncon {
@@ -59,8 +67,16 @@ interface TronconRecu {
 
 interface ReponseItineraire {
   distance: number
+  /** Tracé GeoJSON : chaque point est [longitude, latitude]. */
+  geometry?: { coordinates?: number[][] }
   portions: { steps: TronconRecu[] }[]
 }
+
+/** Le tracé reçu de l'IGN, en points latitude et longitude ; les points incomplets sont écartés. */
+const traceRecu = (geometrie: ReponseItineraire['geometry']): PointDuTrace[] =>
+  (geometrie?.coordinates ?? []).flatMap(([longitude, latitude]) =>
+    typeof longitude === 'number' && typeof latitude === 'number' ? [{ latitude, longitude }] : [],
+  )
 
 export const ROUTE_SANS_NOM = 'Route sans nom'
 
@@ -127,6 +143,7 @@ async function demanderItineraire(depart: Lieu, arrivee: Lieu, contraintes: stri
     end: `${arrivee.longitude},${arrivee.latitude}`,
     constraints: contraintes.join('|'),
     getSteps: 'true',
+    geometryFormat: 'geojson',
     distanceUnit: 'meter',
     waysAttributes: 'vitesse_moyenne_vl|insee_commune_gauche',
   })
@@ -149,6 +166,7 @@ async function demanderItineraire(depart: Lieu, arrivee: Lieu, contraintes: stri
       vitesseRouteKmh: vitesseDeLaRoute(etape.attributes?.vitesse_moyenne_vl),
     })),
     etapes: regrouperEnEtapes(etapes),
+    trace: traceRecu(resultat.geometry),
   }
 }
 
