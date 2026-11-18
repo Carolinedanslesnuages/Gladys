@@ -6,6 +6,7 @@ import CarteTrajet from '../CarteTrajet.vue'
 import type { Lieu } from '@/services/adresses'
 import type { PointDuTrace } from '@/services/itineraire'
 import { violationsAccessibilite } from '@/__tests__/accessibilite'
+import { capEntre, distanceEntre } from '@/services/guidage'
 
 const lyon: Lieu = { libelle: 'Lyon', latitude: 45.75, longitude: 4.85 }
 const vienne: Lieu = { libelle: 'Vienne', latitude: 45.52, longitude: 4.87 }
@@ -309,7 +310,12 @@ describe('Carte du trajet', () => {
       expect(repereVous().querySelector('svg.vehicule-vous')).not.toBeNull()
       // Une toute petite voiture : une voiture sans permis.
       expect(repereVous().querySelector('svg.vehicule-vous')!.getAttribute('width')).toBe('24')
-      expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(true)
+      // À l'arrêt sur le trajet, sans direction du GPS : la voiture regarde la route devant elle.
+      expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(false)
+      const versLaSuiteDuTrajet = capEntre(trace[1]!, trace[2]!)
+      expect(repereVous().style.getPropertyValue('--direction-vous')).toBe(
+        `${versLaSuiteDuTrajet}deg`,
+      )
       expect(repereVous().querySelector('.etiquette-repere')).toBeNull()
       expect(repereVous().textContent).toBe('Votre position')
       expect(repereVous().querySelector('.fr-sr-only')).not.toBeNull()
@@ -379,7 +385,7 @@ describe('Carte du trajet', () => {
       it('place le véhicule au milieu en largeur, 20 % sous le centre : on voit la route devant', async () => {
         const ecran = monter()
         await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
-        await recevoirPosition(ecran, 45.6, 4.95)
+        await recevoirPositionEtCap(ecran, 45.6, 4.95, 0)
         // Carte de 288 px de haut, nord en haut : le centre est 57,6 px (20 %) au nord du véhicule.
         expect(duVehiculeAuCentre().x).toBeCloseTo(0, 1)
         expect(duVehiculeAuCentre().y).toBeCloseTo(-57.6, 1)
@@ -413,6 +419,48 @@ describe('Carte du trajet', () => {
         expect(carteAffichee!.getBearing()).toBeCloseTo(180, 5)
         expect(ecran.find('#annonce-suivi').text()).toBe(
           'La carte tourne dans le sens de la marche.',
+        )
+        ecran.unmount()
+      })
+
+      it('Demande #28 : à l’arrêt sur le trajet, sans direction du GPS, la route est droit devant', async () => {
+        const ecran = monter()
+        await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+        await recevoirPosition(ecran, 45.6, 4.95)
+        const versLaSuiteDuTrajet = capEntre(trace[1]!, trace[2]!)
+        expect(carteAffichee!.getBearing()).toBeCloseTo(360 - versLaSuiteDuTrajet, 5)
+        ecran.unmount()
+      })
+
+      it('Demande #28 : trajet calculé depuis ma position, la voiture est recentrée, la route droit devant', async () => {
+        const ecran = mount(CarteTrajet, {
+          props: {
+            trace: [],
+            depart: null,
+            arrivee: null,
+            enLigne: true,
+            suivreDesLOuverture: true,
+          },
+          global: { plugins: [VueDsfr] },
+          attachTo: document.body,
+        })
+        await recevoirPosition(ecran, 45.75, 4.85)
+        await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
+        const [centreDemande, zoom] = vi.mocked(Leaflet.Map.prototype.setView).mock.lastCall!
+        // Au zoom du suivi, centré un peu devant la voiture (à moins de 200 m) : pas le trajet entier.
+        expect(zoom).toBe(16)
+        const centre = Leaflet.latLng(centreDemande)
+        expect(
+          distanceEntre(
+            { latitude: centre.lat, longitude: centre.lng },
+            { latitude: 45.75, longitude: 4.85 },
+          ),
+        ).toBeLessThan(200)
+        expect(carteAffichee!.getBearing()).toBeCloseTo(360 - capEntre(trace[0]!, trace[1]!), 5)
+        expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(false)
+        expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeUndefined()
+        expect(ecran.find('#annonce-suivi').text()).toBe(
+          'Trajet calculé : la carte vous suit, la route droit devant vous.',
         )
         ecran.unmount()
       })
@@ -543,6 +591,10 @@ describe('Carte du trajet', () => {
         expect(ecran.find('#annonce-suivi').text()).toBe('Recherche de votre position…')
         await recevoirPosition(ecran, 45.75, 4.85)
         expect(reperesPlaces.map((repere) => repere.libelle)).toEqual(['Votre position'])
+        // Sans trajet ni direction du GPS : la voiture n'a pas encore de direction.
+        expect(
+          document.querySelector('.repere-vous')!.classList.contains('repere-vous--sans-direction'),
+        ).toBe(true)
         expect(ecran.find('#avancement-trajet').exists()).toBe(false)
         ecran.unmount()
       })
@@ -557,16 +609,27 @@ describe('Carte du trajet', () => {
         ecran.unmount()
       })
 
-      it('un trajet calculé ensuite est tracé et montré en entier', async () => {
+      it('Demande #28 : un trajet calculé ensuite est tracé, la carte reste sur la personne', async () => {
         const ecran = monterAlAccueil()
         await recevoirPosition(ecran, 45.75, 4.85)
         await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
         expect(lignesTracees).toHaveLength(1)
-        expect(cadrages).toHaveLength(1)
         expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe(
           'Carte du trajet de Lyon à Vienne',
         )
-        expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeTruthy()
+        expect(carteAffichee!.getZoom()).toBe(16)
+        expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeUndefined()
+        ecran.unmount()
+      })
+
+      it('position refusée : un trajet calculé ensuite est montré en entier', async () => {
+        const ecran = monterAlAccueil()
+        surEchec!({ code: 1 })
+        await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
+        expect(cadrages).toHaveLength(1)
+        // La carte ne suit personne : elle n'est pas recentrée au zoom du suivi.
+        expect(carteAffichee!.getZoom()).not.toBe(16)
+        expect(ecran.find('#annonce-suivi').text()).toContain('la carte montre la France')
         ecran.unmount()
       })
 

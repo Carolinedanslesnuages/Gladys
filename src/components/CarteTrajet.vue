@@ -22,7 +22,7 @@ import 'leaflet/dist/leaflet.css'
 import type { Lieu } from '@/services/adresses'
 import type { PointDuTrace } from '@/services/itineraire'
 import { PositionRefusee, suivrePosition, type Coordonnees } from '@/services/position'
-import { avancementSurLeTrace, capEntre, distanceEntre } from '@/services/guidage'
+import { avancementSurLeTrace, capDuTraceDevant, capEntre, distanceEntre } from '@/services/guidage'
 
 const props = defineProps<{
   /** Tracé du trajet retenu ; vide tant qu'aucun itinéraire n'est calculé. */
@@ -167,15 +167,18 @@ function dessinerLeTrajet(): void {
   carte.fitBounds(ligneDuTrajet.getBounds(), { padding: [24, 24], animate: false })
 }
 
-// Nouveau trajet calculé : on le montre en entier ; « Me recentrer » ramène sur la personne.
+// Nouveau trajet calculé : on le montre en entier, sauf si la carte suit la personne. Alors, comme
+// un GPS, la voiture est recentrée et la route est droit devant elle.
 watch(
   () => props.trace,
   () => {
     dessinerLeTrajet()
-    if (aUnTrajet.value && suiviActif.value && carteCentreeSurLaPersonne.value) {
-      carteCentreeSurLaPersonne.value = false
-      messageDuSuivi.value =
-        'Trajet affiché en entier. Utilisez « Me recentrer » pour revenir sur votre position.'
+    if (aUnTrajet.value && suiviActif.value && positionSuivie.value) {
+      directionDeLaPersonne =
+        positionSuivie.value.cap ?? capDuTraceDevant(positionSuivie.value, props.trace)
+      recentrerSurLaPersonne()
+      orienterLaFleche()
+      messageDuSuivi.value = 'Trajet calculé : la carte vous suit, la route droit devant vous.'
     }
   },
 )
@@ -240,7 +243,8 @@ function directionDeMarche(
       DEPLACEMENT_MINIMAL_POUR_LA_DIRECTION_METRES
   )
     return capEntre(positionPrecedente, nouvellePosition)
-  return directionDeLaPersonne
+  // Direction encore inconnue (personne à l'arrêt) : celle de la route devant elle.
+  return directionDeLaPersonne ?? capDuTraceDevant(nouvellePosition, props.trace)
 }
 
 /** Le véhicule pointe dans le sens de la marche à l'écran : sa direction, plus la rotation de la carte. */
