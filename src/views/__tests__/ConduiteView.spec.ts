@@ -146,6 +146,95 @@ describe('Écran de conduite', () => {
     ecran.unmount()
   })
 
+  describe('Bouton de la voix', () => {
+    const dire = vi.fn<(enonce: { text: string }) => void>()
+    const annuler = vi.fn<() => void>()
+    class EnonceSimule {
+      voice: unknown = null
+      lang = ''
+      constructor(public text: string) {}
+    }
+    beforeEach(() => {
+      dire.mockClear()
+      annuler.mockClear()
+      vi.stubGlobal('SpeechSynthesisUtterance', EnonceSimule)
+      Object.defineProperty(window, 'speechSynthesis', {
+        configurable: true,
+        value: { getVoices: () => [{ lang: 'fr-FR', localService: true }], speak: dire, cancel: annuler },
+      })
+    })
+    afterEach(() => Reflect.deleteProperty(window, 'speechSynthesis'))
+
+    it('un seul bouton coupe la voix, puis la remet, avec l’état écrit en texte', async () => {
+      demarrer()
+      const ecran = await monterEnConduite()
+      surPosition({ coords: { latitude: 45, longitude: 4 } })
+      await flushPromises()
+      const bouton = ecran.find('#bouton-voix')
+      // Composant Bouton : 44 px de haut au moins (contrôlé dans apparence.spec.ts).
+      expect(bouton.classes()).toContain('bouton')
+      expect(bouton.element.tagName).toBe('BUTTON')
+      expect(bouton.text()).toBe('Couper la voix')
+      expect(ecran.find('#etat-voix').text()).toBe('Voix active')
+      expect(ecran.find('#etat-voix').attributes('role')).toBe('status')
+      await bouton.trigger('click')
+      expect(ecran.find('#bouton-voix').text()).toBe('Remettre la voix')
+      expect(ecran.find('#etat-voix').text()).toBe('Voix coupée')
+      expect(annuler).toHaveBeenCalled()
+      await ecran.find('#bouton-voix').trigger('click')
+      expect(ecran.find('#bouton-voix').text()).toBe('Couper la voix')
+      expect(ecran.find('#etat-voix').text()).toBe('Voix active')
+      ecran.unmount()
+    })
+
+    it('retrouve le choix « voix coupée » à la réouverture de l’écran', async () => {
+      demarrer()
+      const premierEcran = await monterEnConduite()
+      surPosition({ coords: { latitude: 45, longitude: 4 } })
+      await flushPromises()
+      await premierEcran.find('#bouton-voix').trigger('click')
+      premierEcran.unmount()
+      setActivePinia(createPinia())
+      demarrer()
+      const secondEcran = await monterEnConduite()
+      surPosition({ coords: { latitude: 45, longitude: 4 } })
+      await flushPromises()
+      expect(secondEcran.find('#etat-voix').text()).toBe('Voix coupée')
+      expect(secondEcran.find('#bouton-voix').text()).toBe('Remettre la voix')
+      secondEcran.unmount()
+    })
+
+    it('voix coupée, la consigne reste affichée en grand et rien n’est dit', async () => {
+      demarrer()
+      const ecran = await monterEnConduite()
+      surPosition({ coords: { latitude: 45, longitude: 4 } })
+      await flushPromises()
+      await ecran.find('#bouton-voix').trigger('click')
+      surPosition({ coords: { latitude: 45.0092, longitude: 4 } })
+      await flushPromises()
+      expect(dire).not.toHaveBeenCalled()
+      expect(ecran.find('#consigne-en-cours').text()).toBe('Tournez à droite vers Saint-Martin')
+      expect(ecran.find('#consigne-en-cours').classes()).toContain('consigne')
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecran.unmount()
+    })
+
+    it('remettre la voix : la consigne proche est dite', async () => {
+      demarrer()
+      const ecran = await monterEnConduite()
+      surPosition({ coords: { latitude: 45, longitude: 4 } })
+      await flushPromises()
+      await ecran.find('#bouton-voix').trigger('click')
+      surPosition({ coords: { latitude: 45.0092, longitude: 4 } })
+      await flushPromises()
+      await ecran.find('#bouton-voix').trigger('click')
+      surPosition({ coords: { latitude: 45.0093, longitude: 4 } })
+      await flushPromises()
+      expect(dire).toHaveBeenCalledTimes(1)
+      ecran.unmount()
+    })
+  })
+
   it('aucune violation d’accessibilité automatique, à chaque état', async () => {
     demarrer()
     const ecran = await monterEnConduite()
