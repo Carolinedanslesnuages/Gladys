@@ -12,7 +12,7 @@ const liensRapides = [
 
 <template>
   <DsfrHeader
-    service-title="LÉON"
+    service-title="GLADYS"
     service-description=""
     :logo-text="logoText"
     :quick-links="liensRapides"

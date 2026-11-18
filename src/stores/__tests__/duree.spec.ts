@@ -74,7 +74,7 @@ describe('Durée du trajet et heure d’arrivée', () => {
   it('garde la vitesse sur l’appareil et la retrouve à la réouverture', () => {
     const memoire = simulerLocalStorage()
     useDureeStore().choisirVitesse(40)
-    expect(JSON.parse(memoire.get('leon:vitesse-habituelle')!)).toBe(40)
+    expect(JSON.parse(memoire.get('gladys:vitesse-habituelle')!)).toBe(40)
     setActivePinia(createPinia())
     expect(useDureeStore().vitesseHabituelle).toBe(40)
   })

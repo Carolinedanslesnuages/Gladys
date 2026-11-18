@@ -33,7 +33,7 @@ describe('Itinéraire et détour accepté', () => {
   it('garde le seuil choisi sur l’appareil et le retrouve au retour', () => {
     const memoire = simulerLocalStorage()
     useItineraireStore().choisirSeuil(20)
-    expect(JSON.parse(memoire.get('leon:seuil-detour')!)).toBe(20)
+    expect(JSON.parse(memoire.get('gladys:seuil-detour')!)).toBe(20)
     setActivePinia(createPinia())
     expect(useItineraireStore().seuilDetour).toBe(20)
   })

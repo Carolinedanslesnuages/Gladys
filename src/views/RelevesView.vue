@@ -29,7 +29,7 @@ const dateLisible = (iso: string) => new Date(iso).toLocaleString('fr-FR', { dat
 </script>
 
 <template>
-  <h1>LÉON</h1>
+  <h1>GLADYS</h1>
   <p>Exemple : des relevés saisis sur le terrain, même sans réseau. Ils restent sur cet appareil.</p>
 
   <form novalidate class="fr-mb-4w" @submit.prevent="ajouter">

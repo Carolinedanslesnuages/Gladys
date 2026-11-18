@@ -1,4 +1,4 @@
-# LÉON
+# GLADYS
 
 **Objectif :** Aller d'un point A à un point B en toute sécurité avec ma vsp.
 **Type :** application mobile (installable, hors connexion ; données sur l'appareil)
@@ -15,3 +15,4 @@
 - #3 Calculer un itinéraire adapté à ma VSP — [fiche](revues/story-3-calculer-un-itineraire-adapte-a-ma-vsp.md)
 - #4 Connaître mon vrai temps de trajet — [fiche](revues/story-4-connaitre-mon-vrai-temps-de-trajet.md)
 - #5 Voir et comparer le trajet avant de partir — [fiche](revues/story-5-voir-et-comparer-le-trajet-avant-de-part.md)
+- #11 Changer le nom — [fiche](revues/story-11-changer-le-nom.md)

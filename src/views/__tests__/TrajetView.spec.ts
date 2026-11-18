@@ -119,7 +119,7 @@ describe('Écran « Préparer mon trajet »', () => {
       const ecran = monter()
       await boutonNomme(ecran, 'Utiliser ma position actuelle').trigger('click')
       await flushPromises()
-      expect(ecran.text()).toContain('Position refusée : autorisez la localisation')
+      expect(ecran.text()).toContain('Position refusée : autorisez la localisation pour GLADYS')
       expect(fetchSimule).not.toHaveBeenCalled()
       ecran.unmount()
     })
@@ -176,8 +176,8 @@ describe('Écran « Préparer mon trajet »', () => {
 
     it('reprend un trajet récent sans réseau', async () => {
       simulerLocalStorage({
-        'leon:accord-historique': JSON.stringify('accepte'),
-        'leon:trajets-recents': JSON.stringify([
+        'gladys:accord-historique': JSON.stringify('accepte'),
+        'gladys:trajets-recents': JSON.stringify([
           {
             depart: { libelle: 'Lyon', latitude: 45.75, longitude: 4.85 },
             arrivee: { libelle: 'Vienne', latitude: 45.52, longitude: 4.87 },
@@ -272,7 +272,7 @@ describe('Écran « Préparer mon trajet »', () => {
     })
 
     it('Critère 2 : le seuil choisi est retrouvé au retour dans l’appli', async () => {
-      simulerLocalStorage({ 'leon:seuil-detour': '50' })
+      simulerLocalStorage({ 'gladys:seuil-detour': '50' })
       const ecran = monter()
       await preparerTrajet(ecran, 'Lyon', 'Vienne')
       expect((ecran.find('input[name="seuil-detour"][value="50"]').element as HTMLInputElement).checked).toBe(true)
@@ -392,7 +392,7 @@ describe('Écran « Préparer mon trajet »', () => {
       expect(duree(ecran).text()).toContain('Durée estimée35 min')
       expect(duree(ecran).text()).toContain('vers 8 h 35')
       expect(fetchSimule).not.toHaveBeenCalled()
-      expect(localStorage.getItem('leon:vitesse-habituelle')).toBe('40')
+      expect(localStorage.getItem('gladys:vitesse-habituelle')).toBe('40')
       ecran.unmount()
     })
 
@@ -473,7 +473,7 @@ describe('Écran « Préparer mon trajet »', () => {
 
     it('Critère 2 : les passages sur départementale portent la mention écrite « Départementale »', async () => {
       // À 20 % de détour accepté, le trajet par les villages est refusé : on garde le plus court, avec la D502.
-      simulerLocalStorage({ 'leon:seuil-detour': '20' })
+      simulerLocalStorage({ 'gladys:seuil-detour': '20' })
       const ecran = monter()
       await calculerAvecEtapes(ecran)
       expect(etapes(ecran)).toEqual(['Vienne — D502 — 4 km Départementale', 'Les Abrets — C3 — 6 km'])
@@ -497,7 +497,7 @@ describe('Écran « Préparer mon trajet »', () => {
     })
 
     it('Critère 3 : dit simplement quand le trajet retenu est déjà le plus court', async () => {
-      simulerLocalStorage({ 'leon:seuil-detour': '20' })
+      simulerLocalStorage({ 'gladys:seuil-detour': '20' })
       const ecran = monter()
       await calculerAvecEtapes(ecran)
       expect(comparaison(ecran).text()).toBe('Votre trajet est déjà le trajet le plus court sans autoroute.')
@@ -511,7 +511,7 @@ describe('Écran « Préparer mon trajet »', () => {
       expect(await violationsAccessibilite(document.body)).toEqual([])
       ecran.unmount()
       setActivePinia(createPinia())
-      simulerLocalStorage({ 'leon:seuil-detour': '20' })
+      simulerLocalStorage({ 'gladys:seuil-detour': '20' })
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       const ecranAvecDepartementale = monter()
       await calculerAvecEtapes(ecranAvecDepartementale)
