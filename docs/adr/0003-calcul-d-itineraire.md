@@ -36,3 +36,17 @@ l'appareil : le départ et l'arrivée doivent être envoyés à un service.
 - **À vérifier sur de vrais trajets** : que `wayType = autoroute` couvre bien les voies rapides
   (« type autoroutier » de la BD TOPO), que la clé d'évitement des départementales est acceptée par
   le service, et que le numéro « D… » figure bien dans les étapes renvoyées.
+
+## Révision — 2026-11-18 (demande #18) : seules les départementales à fort trafic sont évitées
+Le PO accepte certaines départementales et en refuse d'autres ; son critère est **le trafic**
+(ex. : la D930). Décision :
+- Le critère vient de l'**importance** BD TOPO de chaque tronçon (1 : liaison nationale … 6 : sans
+  circulation). Une départementale d'importance 1 à 3 est **à fort trafic** ; de 4 à 6, elle est
+  **calme** et permise. Importance inconnue : comptée comme fort trafic, par prudence.
+- La seconde demande évite les routes à fort trafic (`avoid importance < 4`) au lieu de toutes les
+  départementales. L'attribut `importance` est demandé dans `waysAttributes`.
+- Seuls les kilomètres de départementale à fort trafic comptent dans le choix et l'affichage ; les
+  étapes portent la mention « Départementale à fort trafic » ou « Départementale calme ».
+- Constaté sur un vrai trajet : `avoid` reste une préférence (le service peut garder un grand axe) ;
+  `banned importance <= 3` rend souvent le trajet impossible, d'où ce choix.
+- Sans changement : aucune autre donnée ne quitte l'appareil.

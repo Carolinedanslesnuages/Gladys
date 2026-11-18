@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
-  EVITEMENT_DEPARTEMENTALES,
+  EVITEMENT_FORT_TRAFIC,
   INTERDICTION_AUTOROUTES,
   ROUTE_SANS_NOM,
   calculerItineraire,
   choisirItineraire,
+  IMPORTANCE_ROUTE_CALME,
   estDepartementale,
+  estRouteAFortTrafic,
   regrouperEnEtapes,
 } from '../itineraire'
 import { ErreurReseau, type Lieu } from '../adresses'
@@ -18,7 +20,7 @@ const reponseIgn = (etapes: { numero: string; metres: number }[]) =>
   new Response(
     JSON.stringify({
       distance: etapes.reduce((total, etape) => total + etape.metres, 0),
-      portions: [{ steps: etapes.map((etape) => ({ distance: etape.metres, attributes: { name: { cpx_numero: etape.numero } } })) }],
+      portions: [{ steps: etapes.map((etape) => ({ distance: etape.metres, attributes: { cpx_numero: etape.numero } })) }],
     }),
   )
 
@@ -42,7 +44,7 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
       expect(parametres.get('end')).toBe('4.87,45.52')
     }
     expect(JSON.parse(INTERDICTION_AUTOROUTES)).toMatchObject({ constraintType: 'banned', value: 'autoroute' })
-    expect(fetchSimule.mock.calls.some(([adresse]) => adresse.includes(encodeURIComponent(EVITEMENT_DEPARTEMENTALES)))).toBe(
+    expect(fetchSimule.mock.calls.some(([adresse]) => adresse.includes(encodeURIComponent(EVITEMENT_FORT_TRAFIC)))).toBe(
       true,
     )
   })
@@ -59,9 +61,66 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
       ),
     )
     const resultat = await calculerItineraire(lyon, vienne, 30)
-    expect(resultat.itineraire).toMatchObject({ distanceMetres: 9000, departementaleMetres: 3200 })
+    expect(resultat.itineraire).toMatchObject({ distanceMetres: 9000, departementaleFortTraficMetres: 3200 })
     expect(estDepartementale('N7')).toBe(false)
     expect(estDepartementale(undefined)).toBe(false)
+  })
+
+  describe('Demande #18 : seules les départementales à fort trafic sont à éviter', () => {
+    it('évite les routes d’importance 1 à 3 et demande l’importance de chaque route', async () => {
+      fetchSimule.mockImplementation(() => Promise.resolve(reponseIgn([{ numero: '', metres: 10000 }])))
+      await calculerItineraire(lyon, vienne, 30)
+      expect(JSON.parse(EVITEMENT_FORT_TRAFIC)).toEqual({
+        constraintType: 'avoid',
+        key: 'importance',
+        operator: '<',
+        value: IMPORTANCE_ROUTE_CALME,
+      })
+      for (const [adresse] of fetchSimule.mock.calls) {
+        expect(new URL(adresse).searchParams.get('waysAttributes')!.split('|')).toContain('importance')
+      }
+    })
+
+    it('une D930 très fréquentée compte ; une départementale calme ne compte pas', () => {
+      expect(estRouteAFortTrafic({ cpx_numero: 'D930', importance: '2' })).toBe(true)
+      expect(estRouteAFortTrafic({ cpx_numero: 'D12', importance: '3' })).toBe(true)
+      expect(estRouteAFortTrafic({ cpx_numero: 'D75', importance: '4' })).toBe(false)
+      expect(estRouteAFortTrafic({ cpx_numero: 'D75', importance: 5 })).toBe(false)
+      expect(estRouteAFortTrafic({ cpx_numero: 'N7', importance: '1' })).toBe(false)
+    })
+
+    it('par prudence, une départementale d’importance inconnue compte comme fort trafic', () => {
+      expect(estRouteAFortTrafic({ cpx_numero: 'D12' })).toBe(true)
+      expect(estRouteAFortTrafic({ cpx_numero: 'D12', importance: '' })).toBe(true)
+    })
+
+    it('ne compte que les kilomètres de départementale à fort trafic', async () => {
+      fetchSimule.mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              distance: 9000,
+              portions: [
+                {
+                  steps: [
+                    { distance: 3000, attributes: { cpx_numero: 'D930', importance: '2' } },
+                    { distance: 4000, attributes: { cpx_numero: 'D75', importance: '4' } },
+                    { distance: 2000, attributes: { cpx_numero: '', importance: '5' } },
+                  ],
+                },
+              ],
+            }),
+          ),
+        ),
+      )
+      const resultat = await calculerItineraire(lyon, vienne, 30)
+      expect(resultat.itineraire.departementaleFortTraficMetres).toBe(3000)
+      expect(resultat.itineraire.etapes.map((etape) => [etape.route, etape.departementale, etape.fortTrafic])).toEqual([
+        ['D930', true, true],
+        ['D75', true, false],
+        [ROUTE_SANS_NOM, false, false],
+      ])
+    })
   })
 
   it('Story #4 : demande la vitesse de chaque route et la garde par tronçon', async () => {
@@ -73,9 +132,9 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
             portions: [
               {
                 steps: [
-                  { distance: 1000, attributes: { name: { cpx_numero: '' }, vitesse_moyenne_vl: '30' } },
-                  { distance: 1500, attributes: { name: { cpx_numero: '' }, vitesse_moyenne_vl: 80 } },
-                  { distance: 500, attributes: { name: { cpx_numero: '' } } },
+                  { distance: 1000, attributes: { cpx_numero: '', vitesse_moyenne_vl: '30' } },
+                  { distance: 1500, attributes: { cpx_numero: '', vitesse_moyenne_vl: 80 } },
+                  { distance: 500, attributes: { cpx_numero: '' } },
                 ],
               },
             ],
@@ -85,7 +144,7 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
     )
     const resultat = await calculerItineraire(lyon, vienne, 30)
     expect(new URL(fetchSimule.mock.calls[0]![0]).searchParams.get('waysAttributes')).toBe(
-      'vitesse_moyenne_vl|insee_commune_gauche',
+      'vitesse_moyenne_vl|insee_commune_gauche|importance',
     )
     expect(resultat.itineraire.troncons).toEqual([
       { distanceMetres: 1000, vitesseRouteKmh: 30 },
@@ -100,8 +159,8 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
   })
 
   describe('Critère 2 : on évite les départementales si le détour reste sous le seuil choisi', () => {
-    const direct = { distanceMetres: 10000, departementaleMetres: 4000, troncons: [], etapes: [], trace: [] }
-    const parLesVillages = { distanceMetres: 12500, departementaleMetres: 0, troncons: [], etapes: [], trace: [] }
+    const direct = { distanceMetres: 10000, departementaleFortTraficMetres: 4000, troncons: [], etapes: [], trace: [] }
+    const parLesVillages = { distanceMetres: 12500, departementaleFortTraficMetres: 0, troncons: [], etapes: [], trace: [] }
 
     it('retient le trajet de 12,5 km sans départementale à 30 % (trajet direct : 10 km)', () => {
       expect(choisirItineraire(direct, parLesVillages, 30)).toEqual({
@@ -125,8 +184,8 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
   })
 
   it('Critère 4 : sans trajet sans départementale, propose le plus sûr (le moins de départementale)', () => {
-    const direct = { distanceMetres: 10000, departementaleMetres: 4000, troncons: [], etapes: [], trace: [] }
-    const moinsDeDepartementale = { distanceMetres: 11000, departementaleMetres: 1500, troncons: [], etapes: [], trace: [] }
+    const direct = { distanceMetres: 10000, departementaleFortTraficMetres: 4000, troncons: [], etapes: [], trace: [] }
+    const moinsDeDepartementale = { distanceMetres: 11000, departementaleFortTraficMetres: 1500, troncons: [], etapes: [], trace: [] }
     expect(choisirItineraire(direct, moinsDeDepartementale, 10)).toEqual({
       itineraire: moinsDeDepartementale,
       plusCourt: direct,
@@ -142,14 +201,14 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
         JSON.stringify({
           distance: 1000,
           geometry: { type: 'LineString', coordinates: coordonnees },
-          portions: [{ steps: [{ distance: 1000, attributes: { name: { cpx_numero: 'C1' } } }] }],
+          portions: [{ steps: [{ distance: 1000, attributes: { cpx_numero: 'C1' } }] }],
         }),
       )
 
     it('demande le tracé en GeoJSON et garde celui du trajet retenu, en latitude et longitude', async () => {
       fetchSimule.mockImplementation((adresse) =>
         Promise.resolve(
-          adresse.includes('departementale')
+          adresse.includes(encodeURIComponent(EVITEMENT_FORT_TRAFIC))
             ? reponseAvecTrace([
                 [4.85, 45.75],
                 [4.9, 45.6],
@@ -183,7 +242,7 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
   describe('Story #5 : les étapes du trajet, dans l’ordre', () => {
     const troncon = (metres: number, codeCommune: string, numero: string, nomDeRue = '') => ({
       distance: metres,
-      attributes: { insee_commune_gauche: codeCommune, name: { cpx_numero: numero, nom_1_gauche: nomDeRue } },
+      attributes: { insee_commune_gauche: codeCommune, cpx_numero: numero, nom_1_gauche: nomDeRue },
     })
 
     it('Critère 1 : une étape par village et par route, dans l’ordre ; les tronçons qui se suivent sont réunis', () => {
@@ -218,22 +277,18 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
           }),
         )
       const reponseCommune = (nom: string | null) =>
-        new Response(
-          JSON.stringify({
-            features: nom ? [{ geometry: { coordinates: [4.87, 45.52] }, properties: { label: nom } }] : [],
-          }),
-        )
+        nom ? new Response(JSON.stringify({ nom, code: '38544' })) : new Response('{}', { status: 404 })
       fetchSimule.mockImplementation((adresse) => {
         if (adresse.includes('/navigation/')) return Promise.resolve(reponseItineraire())
-        const codeCommune = new URL(adresse).searchParams.get('citycode')
+        const codeCommune = new URL(adresse).pathname.split('/').pop()
         if (codeCommune === '38999') return Promise.reject(new TypeError('Failed to fetch'))
         // 38544 : Vienne ; 38001 : inconnue du service ; 38999 : pas de réponse.
         return Promise.resolve(reponseCommune(codeCommune === '38544' ? 'Vienne' : null))
       })
       const resultat = await calculerItineraire(lyon, vienne, 30)
-      const demandesDeCommunes = fetchSimule.mock.calls.map(([adresse]) => adresse).filter((adresse) => adresse.includes('/geocodage/'))
+      const demandesDeCommunes = fetchSimule.mock.calls.map(([adresse]) => adresse).filter((adresse) => adresse.includes('/communes/'))
       expect(demandesDeCommunes).toHaveLength(3)
-      expect(new URL(demandesDeCommunes[0]!).searchParams.get('type')).toBe('municipality')
+      expect(demandesDeCommunes[0]).toBe('https://geo.api.gouv.fr/communes/38544?fields=nom')
       expect(resultat.itineraire.etapes.map((etape) => etape.commune)).toEqual(['Vienne', null, null])
       expect(resultat.plusCourt).toBe(resultat.itineraire)
     })

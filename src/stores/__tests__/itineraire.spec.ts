@@ -3,18 +3,19 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useItineraireStore } from '../itineraire'
 import type { Lieu } from '@/services/adresses'
 import { simulerLocalStorage } from '@/__tests__/stockage-simule'
+import { simulerOpenStreetMap } from '@/__tests__/openstreetmap-simule'
 
 const lieu = (libelle: string): Lieu => ({ libelle, latitude: 45, longitude: 4 })
 
-const reponseIgn = (metres: number, departementaleMetres: number) =>
+const reponseIgn = (metres: number, departementaleFortTraficMetres: number) =>
   new Response(
     JSON.stringify({
       distance: metres,
       portions: [
         {
           steps: [
-            { distance: metres - departementaleMetres, attributes: { name: { cpx_numero: '' } } },
-            { distance: departementaleMetres, attributes: { name: { cpx_numero: 'D12' } } },
+            { distance: metres - departementaleFortTraficMetres, attributes: { cpx_numero: '' } },
+            { distance: departementaleFortTraficMetres, attributes: { cpx_numero: 'D12' } },
           ],
         },
       ],
@@ -79,5 +80,40 @@ describe('Itinéraire et détour accepté', () => {
     await magasin.calculer(lieu('Lyon'), lieu('Vienne'))
     expect(magasin.resultat).toBeNull()
     expect(magasin.erreur).toMatch(/a besoin du réseau/)
+  })
+
+  describe('Demande #18 : calculateur IGN ou OpenStreetMap', () => {
+    it('utilise l’IGN par défaut', () => {
+      simulerLocalStorage()
+      expect(useItineraireStore().calculateur).toBe('ign')
+    })
+
+    it('garde le calculateur choisi sur l’appareil et le retrouve au retour', () => {
+      const memoire = simulerLocalStorage()
+      useItineraireStore().choisirCalculateur('openstreetmap')
+      expect(JSON.parse(memoire.get('gladys:calculateur')!)).toBe('openstreetmap')
+      setActivePinia(createPinia())
+      expect(useItineraireStore().calculateur).toBe('openstreetmap')
+    })
+
+    it('calcule avec OpenStreetMap une fois choisi, et retient quel calculateur a servi', async () => {
+      simulerLocalStorage()
+      const fetchSimule = vi.fn<(adresse: string, options?: RequestInit) => Promise<Response>>(
+        simulerOpenStreetMap(
+          {
+            plusCourt: [{ kilometres: 10, classe: 'tertiary', noms: ['C3'], codeCommune: '38544' }],
+            fuyantLesGrandsAxes: [{ kilometres: 10, classe: 'tertiary', noms: ['C3'], codeCommune: '38544' }],
+          },
+          { '38544': 'Vienne' },
+        ),
+      )
+      vi.stubGlobal('fetch', fetchSimule)
+      const magasin = useItineraireStore()
+      magasin.choisirCalculateur('openstreetmap')
+      await magasin.calculer(lieu('Lyon'), lieu('Vienne'))
+      expect(fetchSimule.mock.calls[0]![0]).toBe('https://valhalla1.openstreetmap.de/route')
+      expect(magasin.resultat?.itineraire.distanceMetres).toBe(10000)
+      expect(magasin.calculateurDuResultat).toBe('openstreetmap')
+    })
   })
 })

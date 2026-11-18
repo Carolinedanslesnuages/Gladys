@@ -12,7 +12,7 @@ function poserItineraire(): void {
   useItineraireStore().resultat = {
     itineraire: {
       distanceMetres: 30000,
-      departementaleMetres: 0,
+      departementaleFortTraficMetres: 0,
       troncons: [
         { distanceMetres: 15000, vitesseRouteKmh: 30 },
         { distanceMetres: 15000, vitesseRouteKmh: 80 },
@@ -22,7 +22,7 @@ function poserItineraire(): void {
     },
     plusCourt: {
       distanceMetres: 22500,
-      departementaleMetres: 22500,
+      departementaleFortTraficMetres: 22500,
       troncons: [{ distanceMetres: 22500, vitesseRouteKmh: 80 }],
       etapes: [],
       trace: [],

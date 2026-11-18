@@ -29,3 +29,11 @@ le numéro de la route et un code de commune (INSEE), mais pas le nom du village
 - **Négatives** : quelques demandes de plus par calcul (une par commune traversée).
 - **À vérifier sur de vrais trajets** : que l'IGN renvoie bien `insee_commune_gauche`, et que la
   recherche par code de commune renvoie le bon nom.
+
+## Révision (2026-11-18, demande #18)
+Vérifié sur de vrais trajets : toutes les étapes s'affichaient « Commune non précisée — Route sans nom ».
+- L'IGN renvoie les attributs d'un tronçon **à plat** (`attributes.cpx_numero`, `attributes.nom_1_gauche`…),
+  pas sous `attributes.name` : l'appli les lit désormais à plat (cela corrige aussi le repérage des départementales).
+- La Base Adresse Nationale ne trouve pas une commune par son seul code (`q=<code>` ne renvoie rien).
+  Le nom est demandé au **Découpage administratif** (`https://geo.api.gouv.fr/communes/<code>?fields=nom`,
+  service public de l'État, sans compte). Seul le code de la commune part, comme avant.

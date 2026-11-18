@@ -17,12 +17,18 @@ export const INTERDICTION_AUTOROUTES = JSON.stringify({
   value: 'autoroute',
 })
 
-/** Éviter autant que possible les routes départementales. */
-export const EVITEMENT_DEPARTEMENTALES = JSON.stringify({
+/**
+ * Importance BD TOPO (1 : liaison nationale … 6 : sans circulation) à partir de laquelle une
+ * route est calme : 4 (liaison locale) et au-delà. De 1 à 3, le trafic est fort (ex. : la D930).
+ */
+export const IMPORTANCE_ROUTE_CALME = 4
+
+/** Éviter autant que possible les routes à fort trafic ; les départementales calmes restent permises. */
+export const EVITEMENT_FORT_TRAFIC = JSON.stringify({
   constraintType: 'avoid',
-  key: 'cpx_classement_administratif',
-  operator: '=',
-  value: 'departementale',
+  key: 'importance',
+  operator: '<',
+  value: IMPORTANCE_ROUTE_CALME,
 })
 
 /** Une étape du trajet, à lire avant de partir : un village, une route, une distance. */
@@ -33,13 +39,15 @@ export interface Etape {
   commune: string | null
   route: string
   departementale: boolean
+  /** Vrai : départementale à fort trafic, à éviter. Faux pour une départementale calme. */
+  fortTrafic: boolean
   distanceMetres: number
 }
 
-/** Un itinéraire calculé : sa distance totale et ce qu'il garde de départementale (en mètres). */
+/** Un itinéraire calculé : sa distance totale et ce qu'il garde de départementale à fort trafic (en mètres). */
 export interface Itineraire {
   distanceMetres: number
-  departementaleMetres: number
+  departementaleFortTraficMetres: number
   /** Ses tronçons, avec la vitesse de chaque route, pour calculer la durée sur l'appareil. */
   troncons: Troncon[]
   /** Ses étapes, dans l'ordre : les tronçons qui se suivent sur la même route et dans le même village n'en font qu'une. */
@@ -54,13 +62,25 @@ export interface PointDuTrace {
   longitude: number
 }
 
-interface AttributsDuTroncon {
-  name?: { cpx_numero?: string; nom_1_gauche?: string; cpx_toponyme_route_nommee?: string }
+/** Les deux calculateurs d'itinéraire proposés : l'IGN, ou OpenStreetMap en essai (ADR 0007). */
+export type Calculateur = 'ign' | 'openstreetmap'
+
+/** Ce qu'on sait d'un tronçon, sous la forme de la BD TOPO de l'IGN (OpenStreetMap s'y ramène). */
+export interface AttributsDuTroncon {
+  cpx_numero?: string
+  nom_1_gauche?: string
+  cpx_toponyme_route_nommee?: string
   vitesse_moyenne_vl?: number | string
   insee_commune_gauche?: string
+  importance?: number | string
+  /**
+   * OpenStreetMap seulement : route principale ou secondaire (orange ou jaune sur la carte), même
+   * sans numéro « D… » (nationale « N… », grande route sans numéro). L'IGN ne le renseigne pas.
+   */
+  grandAxe?: boolean
 }
 
-interface TronconRecu {
+export interface TronconRecu {
   distance: number
   attributes?: AttributsDuTroncon
 }
@@ -86,14 +106,28 @@ const vitesseDeLaRoute = (vitesseBrute: number | string | undefined): number | n
   return vitesseBrute !== undefined && vitesseBrute !== '' && vitesse > 0 ? vitesse : null
 }
 
-/** Une route départementale porte un numéro « D… » (ou « RD… ») dans les données de l'IGN. */
-export const estDepartementale = (numeroDeRoute: string | undefined) => /^R?D\s?\d/i.test(numeroDeRoute ?? '')
+/**
+ * Une route départementale porte un numéro « D… » (ou « RD… »). Autour de Dijon, Lyon… les
+ * anciennes départementales cédées à la métropole portent un numéro « M… » (la D974 devient M974).
+ */
+export const estDepartementale = (numeroDeRoute: string | undefined) => /^(R?D|M)\s?\d/i.test(numeroDeRoute ?? '')
+
+/**
+ * Route à fort trafic : un grand axe OpenStreetMap, quel que soit son numéro, ou une départementale
+ * d'importance 1 à 3. Une importance inconnue compte comme un fort trafic, par prudence.
+ */
+export const estRouteAFortTrafic = (attributs: AttributsDuTroncon | undefined): boolean => {
+  if (attributs?.grandAxe) return true
+  if (!estDepartementale(attributs?.cpx_numero)) return false
+  const importance = Number(attributs?.importance)
+  return !(importance >= IMPORTANCE_ROUTE_CALME)
+}
 
 /** Le numéro de la route (« D12 »), sinon le nom de la rue, sinon « Route sans nom ». */
 const nomDeLaRoute = (attributs: AttributsDuTroncon | undefined): string =>
-  attributs?.name?.cpx_numero?.trim() ||
-  attributs?.name?.nom_1_gauche?.trim() ||
-  attributs?.name?.cpx_toponyme_route_nommee?.trim() ||
+  attributs?.cpx_numero?.trim() ||
+  attributs?.nom_1_gauche?.trim() ||
+  attributs?.cpx_toponyme_route_nommee?.trim() ||
   ROUTE_SANS_NOM
 
 /** Regroupe, dans l'ordre du trajet, les tronçons qui se suivent sur la même route et dans la même commune. */
@@ -102,16 +136,19 @@ export function regrouperEnEtapes(troncons: TronconRecu[]): Etape[] {
   for (const troncon of troncons) {
     const codeCommune = troncon.attributes?.insee_commune_gauche?.trim() || null
     const route = nomDeLaRoute(troncon.attributes)
+    const fortTrafic = estRouteAFortTrafic(troncon.attributes)
     const etapePrecedente = etapes[etapes.length - 1]
     if (etapePrecedente && etapePrecedente.codeCommune === codeCommune && etapePrecedente.route === route) {
       etapePrecedente.distanceMetres += troncon.distance
+      etapePrecedente.fortTrafic ||= fortTrafic
       continue
     }
     etapes.push({
       codeCommune,
       commune: null,
       route,
-      departementale: estDepartementale(troncon.attributes?.name?.cpx_numero),
+      departementale: estDepartementale(troncon.attributes?.cpx_numero),
+      fortTrafic,
       distanceMetres: troncon.distance,
     })
   }
@@ -119,8 +156,8 @@ export function regrouperEnEtapes(troncons: TronconRecu[]): Etape[] {
 }
 
 /**
- * Donne à chaque étape le nom de son village : une demande par commune au service public des
- * adresses, qui ne reçoit que le code de la commune. Un nom introuvable reste `null`, sans erreur.
+ * Donne à chaque étape le nom de son village : une demande par commune au service public du
+ * découpage administratif, qui ne reçoit que le code de la commune. Un nom introuvable reste `null`, sans erreur.
  */
 export async function nommerLesVillages(etapes: Etape[]): Promise<Etape[]> {
   const codesDesCommunes = [...new Set(etapes.flatMap((etape) => (etape.codeCommune ? [etape.codeCommune] : [])))]
@@ -145,7 +182,7 @@ async function demanderItineraire(depart: Lieu, arrivee: Lieu, contraintes: stri
     getSteps: 'true',
     geometryFormat: 'geojson',
     distanceUnit: 'meter',
-    waysAttributes: 'vitesse_moyenne_vl|insee_commune_gauche',
+    waysAttributes: 'vitesse_moyenne_vl|insee_commune_gauche|importance',
   })
   let reponse: Response
   try {
@@ -155,18 +192,40 @@ async function demanderItineraire(depart: Lieu, arrivee: Lieu, contraintes: stri
   }
   if (!reponse.ok) throw new ErreurReseau()
   const resultat = (await reponse.json()) as ReponseItineraire
-  const etapes = resultat.portions.flatMap((portion) => portion.steps)
+  return itineraireDepuisTroncons(
+    resultat.portions.flatMap((portion) => portion.steps),
+    resultat.distance,
+    traceRecu(resultat.geometry),
+  )
+}
+
+/** Un itinéraire à partir de ses tronçons : kilomètres à fort trafic, vitesses et étapes. */
+export function itineraireDepuisTroncons(
+  tronconsRecus: TronconRecu[],
+  distanceMetres: number,
+  trace: PointDuTrace[],
+): Itineraire {
   return {
-    distanceMetres: resultat.distance,
-    departementaleMetres: etapes
-      .filter((etape) => estDepartementale(etape.attributes?.name?.cpx_numero))
-      .reduce((total, etape) => total + etape.distance, 0),
-    troncons: etapes.map((etape) => ({
-      distanceMetres: etape.distance,
-      vitesseRouteKmh: vitesseDeLaRoute(etape.attributes?.vitesse_moyenne_vl),
+    distanceMetres,
+    departementaleFortTraficMetres: tronconsRecus
+      .filter((tronconRecu) => estRouteAFortTrafic(tronconRecu.attributes))
+      .reduce((total, tronconRecu) => total + tronconRecu.distance, 0),
+    troncons: tronconsRecus.map((tronconRecu) => ({
+      distanceMetres: tronconRecu.distance,
+      vitesseRouteKmh: vitesseDeLaRoute(tronconRecu.attributes?.vitesse_moyenne_vl),
     })),
-    etapes: regrouperEnEtapes(etapes),
-    trace: traceRecu(resultat.geometry),
+    etapes: regrouperEnEtapes(tronconsRecus),
+    trace,
+  }
+}
+
+/** Le résultat, avec les étapes du trajet retenu remplacées (le plus court les reçoit aussi s'il est retenu). */
+export function avecLesEtapesDuTrajetRetenu(resultat: ResultatItineraire, etapes: Etape[]): ResultatItineraire {
+  const itineraireRetenu = { ...resultat.itineraire, etapes }
+  return {
+    ...resultat,
+    itineraire: itineraireRetenu,
+    plusCourt: resultat.retenuEstLePlusCourt ? itineraireRetenu : resultat.plusCourt,
   }
 }
 
@@ -177,14 +236,14 @@ export interface ResultatItineraire {
   plusCourt: Itineraire
   /** Vrai : le trajet retenu est le plus court lui-même. */
   retenuEstLePlusCourt: boolean
-  /** Faux : aucun trajet sans départementale n'existe ; on propose quand même le plus sûr. */
+  /** Faux : aucun trajet sans départementale à fort trafic n'existe ; on propose quand même le plus sûr. */
   sansDepartementalePossible: boolean
-  /** Vrai : un trajet sans départementale existe, mais son détour dépasse le seuil choisi. */
+  /** Vrai : un trajet sans départementale à fort trafic existe, mais son détour dépasse le seuil choisi. */
   detourTropLong: boolean
 }
 
 /**
- * Choisit entre le trajet le plus court (sans autoroute) et celui qui évite les départementales :
+ * Choisit entre le trajet le plus court (sans autoroute) et celui qui évite les départementales à fort trafic :
  * ce dernier est retenu si son détour ne dépasse pas le seuil choisi (en %).
  */
 export function choisirItineraire(
@@ -192,10 +251,12 @@ export function choisirItineraire(
   evitantDepartementales: Itineraire,
   seuilDetourPourcent: number,
 ): ResultatItineraire {
-  const sansDepartementalePossible = evitantDepartementales.departementaleMetres === 0
+  const sansDepartementalePossible = evitantDepartementales.departementaleFortTraficMetres === 0
   if (!sansDepartementalePossible) {
     const plusSur =
-      evitantDepartementales.departementaleMetres < plusCourt.departementaleMetres ? evitantDepartementales : plusCourt
+      evitantDepartementales.departementaleFortTraficMetres < plusCourt.departementaleFortTraficMetres
+        ? evitantDepartementales
+        : plusCourt
     return {
       itineraire: plusSur,
       plusCourt,
@@ -215,17 +276,12 @@ export function choisirItineraire(
   }
 }
 
-/** Itinéraire sans autoroute ni voie rapide, qui évite les départementales dans la limite du seuil. */
+/** Itinéraire sans autoroute ni voie rapide, qui évite les départementales à fort trafic dans la limite du seuil. */
 export async function calculerItineraire(depart: Lieu, arrivee: Lieu, seuilDetourPourcent: number): Promise<ResultatItineraire> {
   const [plusCourt, evitantDepartementales] = await Promise.all([
     demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES]),
-    demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES, EVITEMENT_DEPARTEMENTALES]),
+    demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES, EVITEMENT_FORT_TRAFIC]),
   ])
   const resultat = choisirItineraire(plusCourt, evitantDepartementales, seuilDetourPourcent)
-  const itineraireRetenu = { ...resultat.itineraire, etapes: await nommerLesVillages(resultat.itineraire.etapes) }
-  return {
-    ...resultat,
-    itineraire: itineraireRetenu,
-    plusCourt: resultat.retenuEstLePlusCourt ? itineraireRetenu : resultat.plusCourt,
-  }
+  return avecLesEtapesDuTrajetRetenu(resultat, await nommerLesVillages(resultat.itineraire.etapes))
 }

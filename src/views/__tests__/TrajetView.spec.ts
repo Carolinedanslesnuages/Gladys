@@ -5,6 +5,8 @@ import VueDsfr from '@gouvminint/vue-dsfr'
 import TrajetView from '../TrajetView.vue'
 import { simulerLocalStorage } from '@/__tests__/stockage-simule'
 import { violationsAccessibilite } from '@/__tests__/accessibilite'
+import { EVITEMENT_FORT_TRAFIC } from '@/services/itineraire'
+import { simulerOpenStreetMap, type TrajetsSimules } from '@/__tests__/openstreetmap-simule'
 
 const reponseBaseAdresse = (libelles: string[]) =>
   new Response(
@@ -215,15 +217,15 @@ describe('Écran « Préparer mon trajet »', () => {
   })
 
   describe('Story #3 : calculer un itinéraire adapté à ma VSP', () => {
-    const reponseIgn = (metres: number, departementaleMetres: number) =>
+    const reponseIgn = (metres: number, departementaleFortTraficMetres: number) =>
       new Response(
         JSON.stringify({
           distance: metres,
           portions: [
             {
               steps: [
-                { distance: metres - departementaleMetres, attributes: { name: { cpx_numero: 'C3' } } },
-                { distance: departementaleMetres, attributes: { name: { cpx_numero: 'D502' } } },
+                { distance: metres - departementaleFortTraficMetres, attributes: { cpx_numero: 'C3' } },
+                { distance: departementaleFortTraficMetres, attributes: { cpx_numero: 'D502' } },
               ],
             },
           ],
@@ -250,8 +252,8 @@ describe('Écran « Préparer mon trajet »', () => {
       }
       expect(resultat(ecran).attributes('role')).toBe('status')
       expect(resultat(ecran).text()).toContain('Distance totale10 km')
-      expect(resultat(ecran).text()).toContain('Aucun kilomètre : trajet sans départementale')
-      expect(resultat(ecran).text()).toContain('Itinéraire calculé : 10 km, sans autoroute ni voie rapide, sans départementale.')
+      expect(resultat(ecran).text()).toContain('Aucun kilomètre : trajet sans route à fort trafic')
+      expect(resultat(ecran).text()).toContain('Itinéraire calculé : 10 km, sans autoroute ni voie rapide, sans route à fort trafic.')
       ecran.unmount()
     })
 
@@ -261,13 +263,13 @@ describe('Écran « Préparer mon trajet »', () => {
       expect((ecran.find('input[name="seuil-detour"][value="30"]').element as HTMLInputElement).checked).toBe(true)
       await calculer(ecran, reponseIgn(10000, 4000), reponseIgn(12500, 0))
       expect(resultat(ecran).text()).toContain('12,5 km')
-      expect(resultat(ecran).text()).toContain('trajet sans départementale')
+      expect(resultat(ecran).text()).toContain('trajet sans route à fort trafic')
 
       await ecran.find('input[name="seuil-detour"][value="20"]').trigger('click')
       expect((ecran.find('input[name="seuil-detour"][value="20"]').element as HTMLInputElement).checked).toBe(true)
       await calculer(ecran, reponseIgn(10000, 4000), reponseIgn(12500, 0))
       expect(resultat(ecran).text()).toContain('son détour dépasse 20 %')
-      expect(resultat(ecran).text()).toContain('Sur départementale4 km')
+      expect(resultat(ecran).text()).toContain('Sur route à fort trafic4 km')
       ecran.unmount()
     })
 
@@ -283,8 +285,8 @@ describe('Écran « Préparer mon trajet »', () => {
       const ecran = monter()
       await preparerTrajet(ecran, 'Lyon', 'Vienne')
       await calculer(ecran, reponseIgn(10000, 5000), reponseIgn(11000, 3200))
-      expect(resultat(ecran).text()).toContain('Sur départementale3,2 km')
-      expect(resultat(ecran).text()).toContain('dont 3,2 km sur départementale')
+      expect(resultat(ecran).text()).toContain('Sur route à fort trafic3,2 km')
+      expect(resultat(ecran).text()).toContain('dont 3,2 km sur route à fort trafic')
       ecran.unmount()
     })
 
@@ -292,7 +294,7 @@ describe('Écran « Préparer mon trajet »', () => {
       const ecran = monter()
       await preparerTrajet(ecran, 'Lyon', 'Vienne')
       await calculer(ecran, reponseIgn(10000, 5000), reponseIgn(11000, 3200))
-      expect(resultat(ecran).text()).toContain('Aucun itinéraire sans départementale n’existe pour ce trajet.')
+      expect(resultat(ecran).text()).toContain('Aucun itinéraire sans route à fort trafic n’existe pour ce trajet.')
       expect(resultat(ecran).text()).toContain('Distance totale11 km')
       ecran.unmount()
     })
@@ -341,8 +343,8 @@ describe('Écran « Préparer mon trajet »', () => {
           portions: [
             {
               steps: [
-                { distance: 15000, attributes: { name: { cpx_numero: 'C3' }, vitesse_moyenne_vl: 80 } },
-                { distance: 6000, attributes: { name: { cpx_numero: 'C4' }, vitesse_moyenne_vl: 30 } },
+                { distance: 15000, attributes: { cpx_numero: 'C3', vitesse_moyenne_vl: 80 } },
+                { distance: 6000, attributes: { cpx_numero: 'C4', vitesse_moyenne_vl: 30 } },
               ],
             },
           ],
@@ -420,12 +422,13 @@ describe('Écran « Préparer mon trajet »', () => {
   })
 
   describe('Story #5 : voir et comparer le trajet avant de partir', () => {
-    const troncon = (metres: number, codeCommune: string, numero: string, nomDeRue = '') => ({
+    const troncon = (metres: number, codeCommune: string, numero: string, nomDeRue = '', importance = '2') => ({
       distance: metres,
       attributes: {
         insee_commune_gauche: codeCommune,
         vitesse_moyenne_vl: 80,
-        name: { cpx_numero: numero, nom_1_gauche: nomDeRue },
+        cpx_numero: numero, nom_1_gauche: nomDeRue,
+        importance,
       },
     })
     const reponseIgn = (troncons: ReturnType<typeof troncon>[]) =>
@@ -451,10 +454,10 @@ describe('Écran « Préparer mon trajet »', () => {
       await preparerTrajet(ecran, 'Lyon', 'Vienne')
       fetchSimule.mockImplementation((adresse) => {
         if (adresse.includes('/navigation/')) {
-          return Promise.resolve(adresse.includes('departementale') ? parLesVillages() : plusCourt())
+          return Promise.resolve(adresse.includes(encodeURIComponent(EVITEMENT_FORT_TRAFIC)) ? parLesVillages() : plusCourt())
         }
-        const nom = nomsDesCommunes[new URL(adresse).searchParams.get('citycode') ?? '']
-        return Promise.resolve(reponseBaseAdresse(nom ? [nom] : []))
+        const nom = nomsDesCommunes[new URL(adresse).pathname.split('/').pop() ?? '']
+        return Promise.resolve(nom ? new Response(JSON.stringify({ nom })) : new Response('{}', { status: 404 }))
       })
       await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
       await flushPromises()
@@ -471,12 +474,32 @@ describe('Écran « Préparer mon trajet »', () => {
       ecran.unmount()
     })
 
-    it('Critère 2 : les passages sur départementale portent la mention écrite « Départementale »', async () => {
+    it('Critère 2 : les passages sur route à fort trafic portent la mention écrite « Départementale à fort trafic »', async () => {
       // À 20 % de détour accepté, le trajet par les villages est refusé : on garde le plus court, avec la D502.
       simulerLocalStorage({ 'gladys:seuil-detour': '20' })
       const ecran = monter()
       await calculerAvecEtapes(ecran)
-      expect(etapes(ecran)).toEqual(['Vienne — D502 — 4 km Départementale', 'Les Abrets — C3 — 6 km'])
+      expect(etapes(ecran)).toEqual(['Vienne — D502 — 4 km Départementale à fort trafic', 'Les Abrets — C3 — 6 km'])
+      ecran.unmount()
+    })
+
+    it('Demande #18 : une départementale calme est permise et porte la mention « Départementale calme »', async () => {
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Lyon', 'Vienne')
+      // Le plus court passe par la D502, ici calme (importance 4) : il est retenu, sans fort trafic.
+      const plusCourtCalme = () =>
+        reponseIgn([troncon(4000, '38544', 'D502', '', '4'), troncon(6000, '38001', 'C3')])
+      fetchSimule.mockImplementation((adresse) =>
+        Promise.resolve(
+          adresse.includes('/navigation/')
+            ? plusCourtCalme()
+            : new Response(JSON.stringify({ nom: nomsDesCommunes[new URL(adresse).pathname.split('/').pop() ?? ''] })),
+        ),
+      )
+      await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
+      await flushPromises()
+      expect(etapes(ecran)).toEqual(['Vienne — D502 — 4 km Départementale calme', 'Les Abrets — C3 — 6 km'])
+      expect(ecran.find('#resultat-itineraire').text()).toContain('Aucun kilomètre : trajet sans route à fort trafic')
       ecran.unmount()
     })
 
@@ -521,13 +544,78 @@ describe('Écran « Préparer mon trajet »', () => {
     })
   })
 
+  describe('Demande #18 : essayer OpenStreetMap pour le calcul du trajet', () => {
+    const choixDuCalculateur = (ecran: Ecran) => ecran.find('input[name="calculateur"][value="openstreetmap"]')
+    const etapes = (ecran: Ecran) => ecran.findAll('#etapes-trajet li').map((etape) => etape.text().replace(/\s+/g, ' '))
+
+    const parLesVillages: TrajetsSimules = {
+      plusCourt: [{ kilometres: 4, classe: 'primary', noms: ['D 974'], codeCommune: '21231' }],
+      fuyantLesGrandsAxes: [{ kilometres: 5, classe: 'tertiary', noms: ['D 109'], codeCommune: '21049' }],
+    }
+
+    async function calculerAvecOpenStreetMap(ecran: Ecran, trajets: TrajetsSimules = parLesVillages): Promise<void> {
+      await preparerTrajet(ecran, 'Dijon', 'Beaune')
+      await choixDuCalculateur(ecran).trigger('click')
+      fetchSimule.mockImplementation(simulerOpenStreetMap(trajets, { '21231': 'Dijon', '21049': 'Barges' }))
+      await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
+      await flushPromises()
+    }
+
+    it('propose le choix du calculateur, IGN par défaut, et le garde sur le téléphone', async () => {
+      const memoire = simulerLocalStorage()
+      const ecran = monter()
+      await preparerTrajet(ecran, 'Dijon', 'Beaune')
+      expect(ecran.find('input[name="calculateur"][value="ign"]').element).toHaveProperty('checked', true)
+      expect(ecran.text()).toContain('OpenStreetMap (en essai)')
+      await choixDuCalculateur(ecran).trigger('click')
+      expect(JSON.parse(memoire.get('gladys:calculateur')!)).toBe('openstreetmap')
+      ecran.unmount()
+    })
+
+    it('calcule avec OpenStreetMap, évite la route à fort trafic et le dit', async () => {
+      const ecran = monter()
+      await calculerAvecOpenStreetMap(ecran)
+      expect(fetchSimule.mock.calls.some(([adresse]) => adresse.includes('openstreetmap.de'))).toBe(true)
+      expect(etapes(ecran)).toEqual(['Barges — D 109 — 5 km Départementale calme'])
+      expect(ecran.find('#resultat-itineraire').text()).toContain(
+        'Calculé avecOpenStreetMap (© les contributeurs d’OpenStreetMap)',
+      )
+      ecran.unmount()
+    })
+
+    it('un grand axe sans numéro « D… » porte la mention écrite « Grand axe à fort trafic »', async () => {
+      const ecran = monter()
+      await calculerAvecOpenStreetMap(ecran, {
+        plusCourt: [{ kilometres: 4, classe: 'primary', noms: ['N 74'], codeCommune: '21231' }],
+        fuyantLesGrandsAxes: [
+          { kilometres: 2, classe: 'secondary', noms: ['Route de Seurre'], codeCommune: '21231' },
+          { kilometres: 3, classe: 'tertiary', noms: ['D 109'], codeCommune: '21049' },
+        ],
+      })
+      expect(etapes(ecran)).toEqual([
+        'Dijon — Route de Seurre — 2 km Grand axe à fort trafic',
+        'Barges — D 109 — 3 km Départementale calme',
+      ])
+      expect(ecran.find('#resultat-itineraire').text()).toContain('Sur route à fort trafic2 km')
+      ecran.unmount()
+    })
+
+    it('aucune violation d’accessibilité automatique (choix du calculateur et résultat OpenStreetMap)', async () => {
+      const ecran = monter()
+      await calculerAvecOpenStreetMap(ecran)
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecran.unmount()
+    })
+  })
+
   describe('Demande #16 : voir l’itinéraire sur une carte', () => {
     const reponseAvecTrace = (coordonnees: number[][]) =>
       new Response(
         JSON.stringify({
           distance: 12500,
           geometry: { type: 'LineString', coordinates: coordonnees },
-          portions: [{ steps: [{ distance: 12500, attributes: { name: { cpx_numero: 'C3' } } }] }],
+          portions: [{ steps: [{ distance: 12500, attributes: { cpx_numero: 'C3' } }] }],
         }),
       )
     const traceRetenu = [
@@ -542,7 +630,7 @@ describe('Écran « Préparer mon trajet »', () => {
         if (!adresse.includes('/navigation/')) return Promise.resolve(reponseBaseAdresse([]))
         // Le trajet qui évite les départementales est retenu ; le plus court a un autre tracé.
         return Promise.resolve(
-          adresse.includes('departementale')
+          adresse.includes(encodeURIComponent(EVITEMENT_FORT_TRAFIC))
             ? reponseAvecTrace(traceRetenu)
             : reponseAvecTrace([
                 [4.85, 45.75],
