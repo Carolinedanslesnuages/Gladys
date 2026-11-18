@@ -70,8 +70,8 @@ const resteDuTrajet = computed(() => {
   }
 })
 
-/** Voix active : le son suffit. Le texte reste lu par les lecteurs d'écran mais libère la place de la carte. */
-const texteMasque = computed(() => voixActive.value)
+/** Voix active : le bandeau reste visible (bruit, surdité) mais plus compact, pour laisser la place à la carte. */
+const bandeauCompact = computed(() => voixActive.value)
 
 /**
  * Annonce aux lecteurs d'écran : seulement quand la consigne change, ou quand la distance change
@@ -138,12 +138,12 @@ onUnmounted(() => magasinConduite.arreter())
       <section
         v-else
         aria-labelledby="titre-consigne"
-        :class="['bandeau-consigne', { 'bandeau-consigne--replie': texteMasque }]"
+        :class="['bandeau-consigne', { 'bandeau-consigne--compact': bandeauCompact }]"
       >
         <h2 id="titre-consigne" class="visuellement-cache">Prochaine consigne</h2>
         <Icone id="pictogramme-direction" :nom="pictogrammeDuVirage[consigne.virage]" class="pictogramme-direction" />
-        <p id="consigne-en-cours" :class="['consigne', { 'visuellement-cache': texteMasque }]">{{ consigne.texte }}</p>
-        <p id="distance-consigne" :class="['distance-consigne', { 'visuellement-cache': texteMasque }]">
+        <p id="consigne-en-cours" class="consigne">{{ consigne.texte }}</p>
+        <p id="distance-consigne" class="distance-consigne">
           <span class="visuellement-cache">Distance : </span>{{ distanceLisible(consigne.distanceMetres) }}
         </p>
       </section>
@@ -219,11 +219,19 @@ onUnmounted(() => magasinConduite.arreter())
   color: #ffffff;
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
 }
-/* Voix active : le bandeau se réduit à une fine barre, la carte gagne la place. */
-.bandeau-consigne--replie {
-  padding: 0;
-  height: 0.5rem;
-  overflow: hidden;
+/* Voix active : texte et pictogramme plus petits, la carte gagne la place. */
+.bandeau-consigne--compact {
+  padding: 0.5rem 1rem;
+}
+.bandeau-consigne--compact .consigne {
+  font-size: clamp(1.25rem, 5.5vw, 1.75rem);
+}
+.bandeau-consigne--compact .distance-consigne {
+  font-size: clamp(1.25rem, 5vw, 1.5rem);
+}
+.bandeau-consigne--compact .pictogramme-direction {
+  width: 3rem;
+  height: 3rem;
 }
 .bandeau-consigne {
   display: grid;

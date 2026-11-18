@@ -250,16 +250,17 @@ describe('Écran de conduite', () => {
       ecran.unmount()
     })
 
-    it('voix active : la carte est visible et le texte n’occupe pas l’écran', async () => {
+    it('voix active : la carte est visible et le texte reste affiché, en bandeau compact', async () => {
       demarrer()
       const ecran = await monterEnConduite()
       surPosition({ coords: { latitude: 45, longitude: 4 } })
       await flushPromises()
       expect(ecran.find('.carte-conduite').exists()).toBe(true)
-      expect(ecran.find('#consigne-en-cours').classes()).toContain('visuellement-cache')
-      expect(ecran.find('#distance-consigne').classes()).toContain('visuellement-cache')
-      await ecran.find('#bouton-voix').trigger('click')
       expect(ecran.find('#consigne-en-cours').classes()).not.toContain('visuellement-cache')
+      expect(ecran.find('#distance-consigne').classes()).not.toContain('visuellement-cache')
+      expect(ecran.find('.bandeau-consigne').classes()).toContain('bandeau-consigne--compact')
+      await ecran.find('#bouton-voix').trigger('click')
+      expect(ecran.find('.bandeau-consigne').classes()).not.toContain('bandeau-consigne--compact')
       expect(ecran.find('.carte-conduite').exists()).toBe(true)
       ecran.unmount()
     })
