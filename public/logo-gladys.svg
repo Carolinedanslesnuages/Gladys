@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 120" role="img" aria-label="Gladys">
+  <title>Gladys</title>
+  <g fill="none" stroke="#000091" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <!-- g -->
+    <circle cx="28" cy="68" r="18"/>
+    <path d="M46 50 V98 Q46 112 30 112 Q20 112 14 106"/>
+    <!-- l -->
+    <path d="M64 20 V86"/>
+    <!-- a -->
+    <circle cx="100" cy="68" r="18"/>
+    <path d="M118 50 V86"/>
+    <!-- d -->
+    <circle cx="154" cy="68" r="18"/>
+    <path d="M172 20 V86"/>
+    <!-- y -->
+    <path d="M190 50 V68 Q190 86 208 86 Q226 86 226 68 V50"/>
+    <path d="M226 68 V98 Q226 112 210 112 Q200 112 194 106"/>
+    <!-- s -->
+    <path d="M270 54 Q264 50 257 50 Q244 50 244 59 Q244 68 258 68 Q272 68 272 77 Q272 86 258 86 Q250 86 244 82"/>
+  </g>
+  <!-- étoile à quatre branches, en haut à droite du « s » -->
+  <path transform="translate(81 -4)" fill="#E1000F" d="M203 8 Q206 25 223 28 Q206 31 203 48 Q200 31 183 28 Q200 25 203 8 Z"/>
+</svg>

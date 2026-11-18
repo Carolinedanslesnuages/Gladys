@@ -17,6 +17,9 @@ const liensRapides = [
     :logo-text="logoText"
     :quick-links="liensRapides"
     home-to="/"
+    operator-img-src="/logo-gladys.svg"
+    operator-img-alt="Gladys"
+    :operator-img-style="{ width: '7.75rem', height: '3rem' }"
   />
   <EtatConnexion />
   <MiseAJour />
