@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import ChampLieu from '@/components/ChampLieu.vue'
 import CarteTrajet from '@/components/CarteTrajet.vue'
 import MenuAPropos from '@/components/MenuAPropos.vue'
+import MonVehicule from '@/components/MonVehicule.vue'
 import Alerte from '@/components/interface/Alerte.vue'
 import Bouton from '@/components/interface/Bouton.vue'
 import ChampSaisie from '@/components/interface/ChampSaisie.vue'
@@ -1059,6 +1060,8 @@ async function effacer(confirme: boolean): Promise<void> {
         sur ce téléphone.
       </p>
     </div>
+
+    <MonVehicule v-show="detailAffiche" />
   </div>
 </template>
 
