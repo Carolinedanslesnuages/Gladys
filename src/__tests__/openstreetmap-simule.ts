@@ -75,7 +75,7 @@ export function simulerOpenStreetMap(trajets: TrajetsSimules, nomsDesCommunes: R
   return async (adresse: string, options?: RequestInit): Promise<Response> => {
     const corps = typeof options?.body === 'string' ? JSON.parse(options.body) : null
     if (adresse.endsWith('/route')) {
-      if (corps.costing_options.motor_scooter.shortest) return json({ trip: trajetSimule(traces[0]!) })
+      if (corps.costing_options.motor_scooter.use_distance === 1) return json({ trip: trajetSimule(traces[0]!) })
       if (corps.exclude_polygons) {
         return trajets.contournement ? json({ trip: trajetSimule(traces[traces.length - 1]!) }) : new Response('{}', { status: 400 })
       }

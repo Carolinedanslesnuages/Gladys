@@ -333,8 +333,10 @@ export async function calculerItineraireOpenStreetMap(
   seuilDetourPourcent: number,
 ): Promise<ResultatItineraire> {
   // Deux demandes à la fois au plus : le service public demande de ne pas le solliciter en rafale.
+  // Le plus court se juge à la distance (`use_distance`), pas avec `shortest` : celui-ci annule
+  // l'évitement des voies privées et des dessertes, et ferait couper par la cour d'un voisin.
   const [plusCourt, cheminsFuyants] = await Promise.all([
-    demander<ReponseTrajet>('route', demandeDeTrajet(depart, arrivee, { shortest: true })).then((reponse) =>
+    demander<ReponseTrajet>('route', demandeDeTrajet(depart, arrivee, { use_distance: 1 })).then((reponse) =>
       decrireLeTrajet(reponse.trip),
     ),
     demander<ReponseTrajet>('route', demandeDeTrajet(depart, arrivee, { use_primary: 0 }, AUTRES_CHEMINS_DEMANDES)),

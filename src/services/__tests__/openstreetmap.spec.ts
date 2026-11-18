@@ -149,6 +149,17 @@ describe('Calcul d’itinéraire avec OpenStreetMap (demande #18)', () => {
     expect(EVITEMENT_VOIES_PRIVEES.use_tracks).toBe(0)
   })
 
+  it('le trajet le plus court ne coupe pas par une cour : il garde l’évitement des voies de desserte', async () => {
+    // « shortest » annule tout évitement : le trajet couperait par la cour d’un voisin.
+    fetchSimule.mockImplementation(simulerOpenStreetMap(trajetsDijonBeaune, nomsDesCommunes))
+    await calculerItineraireOpenStreetMap(dijon, beaune, 30)
+    const optionsDesTrajets = fetchSimule.mock.calls
+      .filter(([adresse]) => adresse.endsWith('/route'))
+      .map(([, options]) => JSON.parse(String(options?.body)).costing_options.motor_scooter)
+    for (const options of optionsDesTrajets) expect(options).not.toHaveProperty('shortest')
+    expect(optionsDesTrajets).toContainEqual(expect.objectContaining({ use_distance: 1 }))
+  })
+
   it('nomme les villages, même loin de toute adresse, et regroupe les tronçons d’une même route', async () => {
     fetchSimule.mockImplementation(simulerOpenStreetMap(trajetsDijonBeaune, nomsDesCommunes))
     const { itineraire } = await calculerItineraireOpenStreetMap(dijon, beaune, 30)

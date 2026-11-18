@@ -23,7 +23,9 @@ Aucun des deux ne compte le trafic réel : tous deux classent les routes par imp
 OpenStreetMap (en essai) ». L'IGN reste le choix par défaut. Le choix est gardé sur l'appareil
 (`localStorage`, clé `calculateur`, sans donnée personnelle).
 - Deux trajets, demandés l'un après l'autre (le service public demande d'éviter les rafales) :
-  le plus court (`shortest: true`) et celui qui fuit les routes principales (`use_primary: 0`).
+  le plus court (`use_distance: 1`) et celui qui fuit les routes principales (`use_primary: 0`).
+  Pas `shortest: true` (retour du PO du 2026-11-18 : « il coupe par chez le voisin ») : cette
+  option annule l'évitement des voies privées et des dessertes (`service`).
   Chacun est décrit route par route (`trace_attributes`), puis comparé selon le seuil de détour,
   comme avec l'IGN (`choisirItineraire`).
 - **Autres chemins** (ajout du 2026-11-18, retour du PO : « il me fait prendre un grand axe
