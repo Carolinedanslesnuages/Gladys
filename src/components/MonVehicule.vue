@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import Bouton from '@/components/interface/Bouton.vue'
 import ChampSaisie from '@/components/interface/ChampSaisie.vue'
 import GroupeRadios from '@/components/interface/GroupeRadios.vue'
 import {
@@ -13,10 +12,9 @@ import {
 
 /**
  * « Mon véhicule » : motorisation (gardée sur ce téléphone) et autonomie restante (redemandée à
- * chaque ouverture). Avec `avecValidation`, un bouton referme la question posée à l'ouverture.
+ * chaque ouverture). Dans une fenêtre, c'est la fenêtre qui porte le titre.
  */
-defineProps<{ avecValidation?: boolean }>()
-const emit = defineEmits<{ termine: [] }>()
+defineProps<{ dansUneFenetre?: boolean }>()
 
 const magasinVehicule = useVehiculeStore()
 const { energie, autonomie, erreur } = storeToRefs(magasinVehicule)
@@ -45,8 +43,12 @@ function saisirAutonomie(valeur: string | number | undefined): void {
 </script>
 
 <template>
-  <section id="mon-vehicule" class="marge-bas-8" aria-labelledby="titre-mon-vehicule">
-    <h2 id="titre-mon-vehicule" class="titre-5">Mon véhicule</h2>
+  <section
+    id="mon-vehicule"
+    class="marge-bas-8"
+    :aria-labelledby="dansUneFenetre ? undefined : 'titre-mon-vehicule'"
+  >
+    <h2 v-if="!dansUneFenetre" id="titre-mon-vehicule" class="titre-5">Mon véhicule</h2>
     <p class="texte-petit">Ces informations restent sur ce téléphone.</p>
     <GroupeRadios
       name="energie-vehicule"
@@ -70,12 +72,5 @@ function saisirAutonomie(valeur: string | number | undefined): void {
       Véhicule noté : {{ energie === 'electrique' ? 'électrique' : 'thermique' }},
       {{ autonomie.toLocaleString('fr-FR') }} km d’autonomie restante.
     </p>
-    <Bouton
-      v-if="avecValidation"
-      type="button"
-      :label="autonomie === null ? 'Plus tard' : 'Valider et préparer mon trajet'"
-      :variante="autonomie === null ? 'secondaire' : 'principal'"
-      @click="emit('termine')"
-    />
   </section>
 </template>

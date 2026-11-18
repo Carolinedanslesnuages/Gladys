@@ -8,6 +8,7 @@ import MonVehicule from '@/components/MonVehicule.vue'
 import Alerte from '@/components/interface/Alerte.vue'
 import Bouton from '@/components/interface/Bouton.vue'
 import ChampSaisie from '@/components/interface/ChampSaisie.vue'
+import FenetreModale from '@/components/interface/FenetreModale.vue'
 import GroupeRadios from '@/components/interface/GroupeRadios.vue'
 import Pastille from '@/components/interface/Pastille.vue'
 import { ErreurReseau, lieuLePlusProche, type Lieu } from '@/services/adresses'
@@ -506,11 +507,13 @@ async function effacer(confirme: boolean): Promise<void> {
 <template>
   <h1 class="visuellement-cache">Préparer mon trajet</h1>
 
-  <MonVehicule
+  <FenetreModale
     v-if="questionVehiculeOuverte"
-    avec-validation
-    @termine="questionVehiculeOuverte = false"
-  />
+    titre="Mon véhicule"
+    @close="questionVehiculeOuverte = false"
+  >
+    <MonVehicule dans-une-fenetre />
+  </FenetreModale>
   <Alerte
     v-if="avertissementAutonomie"
     id="avertissement-autonomie"
