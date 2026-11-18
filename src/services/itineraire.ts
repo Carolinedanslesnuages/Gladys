@@ -1,7 +1,7 @@
 /**
  * Calcul d'itinéraire par le service public de l'IGN (Géoplateforme, sans compte). Le départ et
  * l'arrivée quittent l'appareil : décision tracée dans docs/adr/0003-calcul-d-itineraire.md.
- * Chaque demande interdit les autoroutes et voies rapides. Sans réseau, le calcul échoue avec
+ * Chaque demande interdit les autoroutes, voies rapides et chemins de terre. Sans réseau, le calcul échoue avec
  * `ErreurReseau`.
  */
 import { ErreurReseau, nomDeCommune, type Lieu } from '@/services/adresses'
@@ -15,6 +15,18 @@ export const INTERDICTION_AUTOROUTES = JSON.stringify({
   key: 'wayType',
   operator: '=',
   value: 'autoroute',
+})
+
+/**
+ * Jamais de chemin de terre : une VSP ne peut pas y rouler. Pour l'IGN, ce sont les « routes
+ * empierrées » (non revêtues) ; les vrais « chemins » sont déjà écartés par le profil voiture.
+ * Le service accepte au plus 3 contraintes par demande.
+ */
+export const INTERDICTION_CHEMINS_DE_TERRE = JSON.stringify({
+  constraintType: 'banned',
+  key: 'nature',
+  operator: '=',
+  value: 'route_empierree',
 })
 
 /** Éviter autant que possible les routes départementales. */
@@ -200,8 +212,8 @@ export function choisirItineraire(
 /** Itinéraire sans autoroute ni voie rapide, qui évite les départementales dans la limite du seuil. */
 export async function calculerItineraire(depart: Lieu, arrivee: Lieu, seuilDetourPourcent: number): Promise<ResultatItineraire> {
   const [plusCourt, evitantDepartementales] = await Promise.all([
-    demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES]),
-    demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES, EVITEMENT_DEPARTEMENTALES]),
+    demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES, INTERDICTION_CHEMINS_DE_TERRE]),
+    demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES, INTERDICTION_CHEMINS_DE_TERRE, EVITEMENT_DEPARTEMENTALES]),
   ])
   const resultat = choisirItineraire(plusCourt, evitantDepartementales, seuilDetourPourcent)
   const itineraireRetenu = { ...resultat.itineraire, etapes: await nommerLesVillages(resultat.itineraire.etapes) }

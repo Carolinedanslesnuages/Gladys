@@ -21,6 +21,10 @@ l'appareil : le départ et l'arrivée doivent être envoyés à un service.
 - Deux demandes par calcul (ressource `bdtopo-pgr`, profil voiture, trajet le plus court), toutes
   deux avec `banned wayType = autoroute` : le trajet le plus court sans autoroute, et celui qui
   évite en plus les départementales (`avoid cpx_classement_administratif = departementale`).
+- Les deux demandes interdisent aussi les chemins de terre (`banned nature = route_empierree`,
+  demande #15) : une VSP ne peut pas y rouler. Les « chemins » de la BD TOPO sont déjà écartés
+  par le profil voiture (vérifié le 2026-11-18). Le service accepte au plus 3 contraintes par
+  demande : la demande qui évite les départementales est au maximum.
 - Les kilomètres sur départementale sont comptés sur les étapes dont le numéro de route commence
   par « D » (ou « RD »).
 - Le trajet qui évite les départementales est retenu si son détour ne dépasse pas le **seuil choisi

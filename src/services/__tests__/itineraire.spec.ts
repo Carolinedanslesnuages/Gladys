@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   EVITEMENT_DEPARTEMENTALES,
   INTERDICTION_AUTOROUTES,
+  INTERDICTION_CHEMINS_DE_TERRE,
   ROUTE_SANS_NOM,
   calculerItineraire,
   choisirItineraire,
@@ -45,6 +46,21 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
     expect(fetchSimule.mock.calls.some(([adresse]) => adresse.includes(encodeURIComponent(EVITEMENT_DEPARTEMENTALES)))).toBe(
       true,
     )
+  })
+
+  it('chaque demande interdit les chemins de terre (routes empierrées), sans dépasser 3 contraintes', async () => {
+    fetchSimule.mockImplementation(() => Promise.resolve(reponseIgn([{ numero: '', metres: 10000 }])))
+    await calculerItineraire(lyon, vienne, 30)
+    expect(JSON.parse(INTERDICTION_CHEMINS_DE_TERRE)).toMatchObject({
+      constraintType: 'banned',
+      key: 'nature',
+      value: 'route_empierree',
+    })
+    for (const [adresse] of fetchSimule.mock.calls) {
+      const contraintes = new URL(adresse).searchParams.get('constraints')!.split('|')
+      expect(contraintes).toContain(INTERDICTION_CHEMINS_DE_TERRE)
+      expect(contraintes.length).toBeLessThanOrEqual(3)
+    }
   })
 
   it('compte les kilomètres sur départementale d’après le numéro de route', async () => {
