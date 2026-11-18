@@ -1,4 +1,4 @@
-# LÉON — instructions pour les agents de code
+# GLADYS — instructions pour les agents de code
 
 Lu par Codex, OpenCode, Cursor, Copilot, Gemini CLI… ; `CLAUDE.md` l'importe pour Claude Code.
 

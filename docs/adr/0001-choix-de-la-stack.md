@@ -3,7 +3,7 @@
 - **Statut** : Accepted
 - **Date** : 2026-11-17
 - **Décideurs** : Carolinedanslesnuages, via ADA
-- **Sujet** : stack technique du projet LÉON
+- **Sujet** : stack technique du projet GLADYS
 
 ## Contexte
 Aller d'un point A à un point B en toute sécurité avec ma vsp. Le service doit s'utiliser sur téléphone, y compris sans réseau. Seules les stacks

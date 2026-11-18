@@ -12,7 +12,7 @@ const router = createRouter({
 
 // Titre de page qui dit où l'on est (RGAA 8.6).
 router.afterEach((destination) => {
-  document.title = `${String(destination.meta.titre ?? 'Accueil')} — LÉON`
+  document.title = `${String(destination.meta.titre ?? 'Accueil')} — GLADYS`
 })
 
 export default router

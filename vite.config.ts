@@ -16,8 +16,8 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['icone.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'LÉON',
-        short_name: 'LÉON',
+        name: 'GLADYS',
+        short_name: 'GLADYS',
         description: 'Application installable, utilisable hors connexion.',
         lang: 'fr',
         display: 'standalone',

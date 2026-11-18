@@ -26,7 +26,7 @@ Vérifié automatiquement :
 - lint d'accessibilité : 0 erreur.
 
 Mis en place :
-- composants DSFR (champs, boutons, alertes) ; un seul `h1`, puis des `h2` ; titre de page « Préparer mon trajet — LÉON » ;
+- composants DSFR (champs, boutons, alertes) ; un seul `h1`, puis des `h2` ; titre de page « Préparer mon trajet — GLADYS » ;
 - étiquettes visibles « Départ » / « Arrivée », champs obligatoires signalés (astérisque expliqué), aide sous chaque champ ;
 - erreurs écrites en clair, reliées au champ (`aria-describedby`) et annoncées ;
 - propositions = liste de boutons atteignables au clavier ; leur nombre est annoncé (`role="status"`) ; après un choix, le focus revient au champ ;
@@ -46,7 +46,7 @@ Mis en place :
 - Aucune dépendance ajoutée. Le calcul d'itinéraire n'est pas dans cette demande : « Valider mon trajet » prépare et garde le trajet.
 
 **Problème repéré, non corrigé (hors périmètre) :** le test existant « relit les relevés au
-démarrage » échoue déjà : il utilise la clé `__SLUG__:releves` au lieu de `leon:releves` (gabarit
+démarrage » échoue déjà : il utilise la clé `__SLUG__:releves` au lieu de `gladys:releves` (gabarit
 de création du projet non remplacé). Correction d'une ligne à faire dans une demande `fix/` séparée.
 
 ## Résultat des contrôles (dans le conteneur)

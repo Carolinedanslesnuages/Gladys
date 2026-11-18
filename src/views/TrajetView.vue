@@ -160,7 +160,7 @@ async function utiliserMaPosition(): Promise<void> {
     annonce.value = ''
     if (erreur instanceof PositionRefusee) {
       erreurDepart.value =
-        'Position refusée : autorisez la localisation pour LÉON dans les réglages du téléphone, ou saisissez votre départ.'
+        'Position refusée : autorisez la localisation pour GLADYS dans les réglages du téléphone, ou saisissez votre départ.'
     } else if (erreur instanceof ErreurReseau) {
       erreurDepart.value = 'Trouver l’adresse de votre position a besoin du réseau. Saisissez votre départ plus tard.'
     } else {

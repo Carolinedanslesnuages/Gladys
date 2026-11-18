@@ -27,8 +27,8 @@ describe('Trajets récents gardés sur l’appareil', () => {
     magasin.choisirAccord('refuse')
     magasin.retenirTrajet(lieu('Lyon'), lieu('Givors'))
     expect(magasin.trajetsRecents).toEqual([])
-    expect(JSON.parse(memoire.get('leon:trajets-recents')!)).toEqual([])
-    expect(JSON.parse(memoire.get('leon:accord-historique')!)).toBe('refuse')
+    expect(JSON.parse(memoire.get('gladys:trajets-recents')!)).toEqual([])
+    expect(JSON.parse(memoire.get('gladys:accord-historique')!)).toBe('refuse')
   })
 
   it('garde les 5 derniers trajets, du plus récent au plus ancien, sans doublon', () => {
@@ -42,8 +42,8 @@ describe('Trajets récents gardés sur l’appareil', () => {
 
   it('relit les trajets au démarrage, même hors connexion', () => {
     simulerLocalStorage({
-      'leon:accord-historique': JSON.stringify('accepte'),
-      'leon:trajets-recents': JSON.stringify([{ depart: lieu('Lyon'), arrivee: lieu('Vienne'), valideLe: '2026-11-16T10:00:00Z' }]),
+      'gladys:accord-historique': JSON.stringify('accepte'),
+      'gladys:trajets-recents': JSON.stringify([{ depart: lieu('Lyon'), arrivee: lieu('Vienne'), valideLe: '2026-11-16T10:00:00Z' }]),
     })
     expect(useTrajetsStore().trajetsRecents.map((trajet) => trajet.arrivee.libelle)).toEqual(['Vienne'])
   })
@@ -55,7 +55,7 @@ describe('Trajets récents gardés sur l’appareil', () => {
     magasin.retenirTrajet(lieu('Lyon'), lieu('Vienne'))
     magasin.effacerTrajets()
     expect(magasin.trajetsRecents).toEqual([])
-    expect(JSON.parse(memoire.get('leon:trajets-recents')!)).toEqual([])
+    expect(JSON.parse(memoire.get('gladys:trajets-recents')!)).toEqual([])
   })
 
   it('prévient si l’appareil refuse d’enregistrer', () => {
