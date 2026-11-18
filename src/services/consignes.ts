@@ -83,6 +83,8 @@ export interface Consigne {
   distanceMetres: number
   /** Vrai pour la dernière : l'arrivée. */
   estLArrivee: boolean
+  /** Sens du virage, pour le pictogramme ; « arrivee » pour la dernière consigne. */
+  virage: Virage | 'arrivee'
   /** Rang de l'étape qui se termine par cette consigne : distingue deux consignes au texte identique. */
   rangEtape: number
 }
@@ -95,9 +97,15 @@ function destinationDuVirage(etapeCourante: Etape, etapeSuivante: Etape): string
 
 function consigneALaFinDeLEtape(etapes: Etape[], rangEtape: number): Omit<Consigne, 'distanceMetres'> {
   const etapeSuivante = etapes[rangEtape + 1]
-  if (!etapeSuivante) return { texte: 'Vous arrivez à destination', estLArrivee: true, rangEtape }
-  const verbe = VERBES_DE_VIRAGE[etapes[rangEtape]!.virageALaFin ?? 'tout-droit']
-  return { texte: `${verbe} ${destinationDuVirage(etapes[rangEtape]!, etapeSuivante)}`, estLArrivee: false, rangEtape }
+  if (!etapeSuivante) return { texte: 'Vous arrivez à destination', estLArrivee: true, virage: 'arrivee', rangEtape }
+  const virage = etapes[rangEtape]!.virageALaFin ?? 'tout-droit'
+  const verbe = VERBES_DE_VIRAGE[virage]
+  return {
+    texte: `${verbe} ${destinationDuVirage(etapes[rangEtape]!, etapeSuivante)}`,
+    estLArrivee: false,
+    virage,
+    rangEtape,
+  }
 }
 
 const distanceSurLeTrace = (trace: PointDuTrace[], rangDeDepart: number, rangDArrivee: number): number => {
@@ -144,4 +152,19 @@ export function phraseAnnoncee(consigne: Consigne): string {
 export function distanceLisible(metres: number): string {
   if (metres < 1000) return `${Math.max(0, Math.round(metres / 10) * 10)} m`
   return `${(metres / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`
+}
+
+/** Ce qu'il reste à parcourir jusqu'à l'arrivée, en mètres, le long du tracé depuis le point le plus proche. */
+export function distanceRestanteSurLeTrace(position: Coordonnees, trace: PointDuTrace[]): number {
+  if (trace.length < 2) return 0
+  let rangPlusProche = 0
+  let ecartLePlusPetit = Infinity
+  trace.forEach((point, rang) => {
+    const ecart = distanceEntre(position, point)
+    if (ecart < ecartLePlusPetit) {
+      ecartLePlusPetit = ecart
+      rangPlusProche = rang
+    }
+  })
+  return distanceSurLeTrace(trace, rangPlusProche, trace.length - 1)
 }

@@ -515,16 +515,18 @@ const nomDeLaCarte = () =>
         </div>
       </div>
       <!-- Boutons compacts (icône seule) : leur nom complet est lu par les lecteurs d'écran et affiché au survol. -->
+      <!-- Gros bouton avec son texte, à portée de pouce : on le touche d'un coup d'œil, sans viser. -->
+      <Bouton
+        v-if="pleinEcran || (suiviActif && !carteCentreeSurLaPersonne)"
+        id="bouton-recentrer"
+        type="button"
+        icone="recentrer"
+        label="Recentrer"
+        aria-label="Me recentrer sur ma position"
+        class="bouton-recentrer"
+        @click="recentrerSurLaPersonne"
+      />
       <div class="commandes-carte">
-        <Bouton
-          v-if="pleinEcran || (suiviActif && !carteCentreeSurLaPersonne)"
-          type="button"
-          icone="recentrer"
-          icone-seule
-          label="Recentrer"
-          aria-label="Me recentrer sur ma position"
-          @click="recentrerSurLaPersonne"
-        />
         <Bouton
           type="button"
           variante="secondaire"
@@ -655,6 +657,17 @@ const nomDeLaCarte = () =>
   padding: 0.5rem 0.75rem;
   background: var(--fond);
   box-shadow: 0 2px 6px rgb(0 0 18 / 16%);
+}
+.bouton-recentrer {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 1.75rem;
+  z-index: 1000;
+  min-height: 3.5rem;
+  padding-inline: 1.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgb(0 0 18 / 35%);
 }
 .commandes-carte {
   position: absolute;

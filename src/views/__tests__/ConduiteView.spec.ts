@@ -76,6 +76,34 @@ describe('Écran de conduite', () => {
     ecran.unmount()
   })
 
+  it('montre un pictogramme du virage, décoratif, qui devient un drapeau à l’arrivée', async () => {
+    demarrer()
+    const ecran = await monterEnConduite()
+    surPosition({ coords: { latitude: 45, longitude: 4 } })
+    await flushPromises()
+    const droite = ecran.find('#pictogramme-direction path').attributes('d')
+    expect(ecran.find('#pictogramme-direction').attributes('aria-hidden')).toBe('true')
+    surPosition({ coords: { latitude: 45.0095, longitude: 4 } })
+    await flushPromises()
+    expect(ecran.find('#pictogramme-direction path').attributes('d')).not.toBe(droite)
+    ecran.unmount()
+  })
+
+  it('affiche l’heure d’arrivée, le temps et la distance restants, qui diminuent en avançant', async () => {
+    demarrer()
+    const ecran = await monterEnConduite()
+    expect(ecran.find('#reste-du-trajet').exists()).toBe(false)
+    surPosition({ coords: { latitude: 45, longitude: 4 } })
+    await flushPromises()
+    const auDepart = ecran.find('#reste-du-trajet').text()
+    expect(auDepart).toMatch(/Arrivée à \d+ h \d{2}/)
+    expect(auDepart).toContain('restantes')
+    surPosition({ coords: { latitude: 45.0095, longitude: 4 } })
+    await flushPromises()
+    expect(ecran.find('#reste-du-trajet').text()).not.toBe(auDepart)
+    ecran.unmount()
+  })
+
   it('met la consigne en gros caractères, avec un seul titre principal', async () => {
     demarrer()
     const ecran = await monterEnConduite()
@@ -222,16 +250,17 @@ describe('Écran de conduite', () => {
       ecran.unmount()
     })
 
-    it('voix active : la carte est visible et le texte n’occupe pas l’écran', async () => {
+    it('voix active : la carte est visible et le texte reste affiché, en bandeau compact', async () => {
       demarrer()
       const ecran = await monterEnConduite()
       surPosition({ coords: { latitude: 45, longitude: 4 } })
       await flushPromises()
       expect(ecran.find('.carte-conduite').exists()).toBe(true)
-      expect(ecran.find('#consigne-en-cours').classes()).toContain('visuellement-cache')
-      expect(ecran.find('#distance-consigne').classes()).toContain('visuellement-cache')
-      await ecran.find('#bouton-voix').trigger('click')
       expect(ecran.find('#consigne-en-cours').classes()).not.toContain('visuellement-cache')
+      expect(ecran.find('#distance-consigne').classes()).not.toContain('visuellement-cache')
+      expect(ecran.find('.bandeau-consigne').classes()).toContain('bandeau-consigne--compact')
+      await ecran.find('#bouton-voix').trigger('click')
+      expect(ecran.find('.bandeau-consigne').classes()).not.toContain('bandeau-consigne--compact')
       expect(ecran.find('.carte-conduite').exists()).toBe(true)
       ecran.unmount()
     })

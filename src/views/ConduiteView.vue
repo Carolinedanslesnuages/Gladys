@@ -5,8 +5,11 @@ import { useRouter } from 'vue-router'
 import Alerte from '@/components/interface/Alerte.vue'
 import Bouton from '@/components/interface/Bouton.vue'
 import CarteTrajet from '@/components/CarteTrajet.vue'
-import { distanceLisible } from '@/services/consignes'
+import Icone, { type NomIcone } from '@/components/interface/Icone.vue'
+import { distanceLisible, distanceRestanteSurLeTrace, type Consigne } from '@/services/consignes'
+import { formaterDuree, formaterHeure, heureDArrivee } from '@/services/duree'
 import { useConduiteStore } from '@/stores/conduite'
+import { useDureeStore } from '@/stores/duree'
 import { useItineraireStore } from '@/stores/itineraire'
 import { useVoixStore } from '@/stores/voix'
 
@@ -16,6 +19,15 @@ const { etat, consigne, consignesAbsentes, voixAbsente } = storeToRefs(magasinCo
 const { resultat } = storeToRefs(useItineraireStore())
 const magasinVoix = useVoixStore()
 const { active: voixActive, erreur: erreurVoix } = storeToRefs(magasinVoix)
+
+/** Pictogramme décoratif : le texte de la consigne dit déjà le sens du virage. */
+const pictogrammeDuVirage: Record<Consigne['virage'], NomIcone> = {
+  droite: 'virageDroite',
+  gauche: 'virageGauche',
+  'tout-droit': 'toutDroit',
+  'demi-tour': 'demiTour',
+  arrivee: 'arrivee',
+}
 
 const trajetAbsent = computed(() => !resultat.value)
 
@@ -37,8 +49,29 @@ onUnmounted(() => {
   window.removeEventListener('offline', suivreLeReseau)
 })
 
-/** Voix active : le son suffit. Le texte reste lu par les lecteurs d'écran mais libère la place de la carte. */
-const texteMasque = computed(() => voixActive.value)
+/**
+ * Ce qu'il reste : distance sur le tracé, durée (même vitesse que la préparation, au prorata de la
+ * distance restante) et heure d'arrivée. L'heure se remet à jour chaque minute, sans réseau.
+ */
+const { dureeMinutes } = storeToRefs(useDureeStore())
+const maintenant = ref(new Date())
+const minuteurHorloge = window.setInterval(() => (maintenant.value = new Date()), 30_000)
+onUnmounted(() => window.clearInterval(minuteurHorloge))
+const resteDuTrajet = computed(() => {
+  const position = magasinConduite.position
+  const itineraire = resultat.value?.itineraire
+  if (!position || !itineraire || dureeMinutes.value === null || itineraire.distanceMetres <= 0) return null
+  const distanceRestante = Math.min(distanceRestanteSurLeTrace(position, itineraire.trace), itineraire.distanceMetres)
+  const minutesRestantes = dureeMinutes.value * (distanceRestante / itineraire.distanceMetres)
+  return {
+    heure: formaterHeure(heureDArrivee(maintenant.value, minutesRestantes), maintenant.value),
+    duree: formaterDuree(minutesRestantes),
+    distance: distanceLisible(distanceRestante),
+  }
+})
+
+/** Voix active : le bandeau reste visible (bruit, surdité) mais plus compact, pour laisser la place à la carte. */
+const bandeauCompact = computed(() => voixActive.value)
 
 /**
  * Annonce aux lecteurs d'écran : seulement quand la consigne change, ou quand la distance change
@@ -102,15 +135,20 @@ onUnmounted(() => magasinConduite.arreter())
       <p v-if="!consigne" id="recherche-position" role="status" class="texte-grand">
         Recherche de votre position…
       </p>
-      <section v-else aria-labelledby="titre-consigne">
+      <section
+        v-else
+        aria-labelledby="titre-consigne"
+        :class="['bandeau-consigne', { 'bandeau-consigne--compact': bandeauCompact }]"
+      >
         <h2 id="titre-consigne" class="visuellement-cache">Prochaine consigne</h2>
-        <p id="consigne-en-cours" :class="['consigne', { 'visuellement-cache': texteMasque }]">{{ consigne.texte }}</p>
-        <p id="distance-consigne" :class="['distance-consigne', { 'visuellement-cache': texteMasque }]">
+        <Icone id="pictogramme-direction" :nom="pictogrammeDuVirage[consigne.virage]" class="pictogramme-direction" />
+        <p id="consigne-en-cours" class="consigne">{{ consigne.texte }}</p>
+        <p id="distance-consigne" class="distance-consigne">
           <span class="visuellement-cache">Distance : </span>{{ distanceLisible(consigne.distanceMetres) }}
         </p>
       </section>
       <p id="annonce-consigne" role="status" class="visuellement-cache">{{ annonce }}</p>
-      <div class="commande-voix marge-haut-6">
+      <div class="commande-voix">
         <Bouton
           id="bouton-voix"
           type="button"
@@ -131,7 +169,7 @@ onUnmounted(() => magasinConduite.arreter())
       </div>
     </template>
 
-    <div v-if="!trajetAbsent" class="carte-conduite marge-haut-6">
+    <div v-if="!trajetAbsent" class="carte-conduite">
       <CarteTrajet
         :trace="traceDuTrajet"
         :depart="departDuTrajet"
@@ -141,12 +179,18 @@ onUnmounted(() => magasinConduite.arreter())
       />
     </div>
 
+    <p v-if="resteDuTrajet" id="reste-du-trajet" class="reste-du-trajet">
+      <span class="texte-gras">Arrivée à {{ resteDuTrajet.heure }}</span>
+      <span>{{ resteDuTrajet.duree }} restantes</span>
+      <span>{{ resteDuTrajet.distance }}</span>
+    </p>
+
     <Bouton
       id="bouton-arreter-trajet"
       type="button"
       variante="secondaire"
       icone="arreter"
-      class="marge-haut-6"
+      class="bouton-arret"
       :label="trajetAbsent ? 'Retour à la préparation du trajet' : 'Arrêter le trajet'"
       @click="arreterLeTrajet"
     />
@@ -154,12 +198,62 @@ onUnmounted(() => magasinConduite.arreter())
 </template>
 
 <style scoped>
+/* Écran de conduite façon GPS : bandeau de consigne en haut, carte qui occupe le reste,
+   commandes (voix, arrêt) en bas, à portée de pouce. */
 .conduite {
-  padding-block: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-block: 0.5rem;
+}
+.conduite h1 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--texte-discret);
+}
+.bandeau-consigne {
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background: var(--vert-route-fonce);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+}
+/* Voix active : texte et pictogramme plus petits, la carte gagne la place. */
+.bandeau-consigne--compact {
+  padding: 0.5rem 1rem;
+}
+.bandeau-consigne--compact .consigne {
+  font-size: clamp(1.25rem, 5.5vw, 1.75rem);
+}
+.bandeau-consigne--compact .distance-consigne {
+  font-size: clamp(1.25rem, 5vw, 1.5rem);
+}
+.bandeau-consigne--compact .pictogramme-direction {
+  width: 3rem;
+  height: 3rem;
+}
+.bandeau-consigne {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 1rem;
+  align-items: center;
+}
+.bandeau-consigne > h2,
+.bandeau-consigne > .consigne,
+.bandeau-consigne > .distance-consigne {
+  grid-column: 2;
+}
+.pictogramme-direction {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  width: clamp(3.5rem, 18vw, 6rem);
+  height: clamp(3.5rem, 18vw, 6rem);
 }
 /* Lisible d'un coup d'œil, même à 320 px de large : le texte revient à la ligne. */
 .consigne {
-  margin: 1rem 0 0.5rem;
+  margin: 0 0 0.25rem;
   font-size: clamp(2rem, 9vw, 3.5rem);
   font-weight: 800;
   line-height: 1.15;
@@ -169,7 +263,7 @@ onUnmounted(() => magasinConduite.arreter())
   margin: 0;
   font-size: clamp(1.75rem, 8vw, 3rem);
   font-weight: 700;
-  color: var(--vert-route-fonce);
+  color: #ffffff;
 }
 .commande-voix {
   display: flex;
@@ -180,10 +274,30 @@ onUnmounted(() => magasinConduite.arreter())
 .commande-voix p {
   margin: 0;
 }
+/* La carte occupe toute la place entre le bandeau et la ligne d'arrivée : pas de blanc. */
+.carte-conduite :deep(.carte-complete) {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  min-height: 0;
+}
 .carte-conduite {
   position: relative;
-  height: 60vh;
-  min-height: 18rem;
+  flex: 1 1 0;
+  min-height: 14rem;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+.reste-du-trajet {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  font-size: 1.25rem;
+}
+.bouton-arret {
+  width: 100%;
 }
 .position-indisponible {
   border: 2px solid var(--erreur);

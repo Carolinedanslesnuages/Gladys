@@ -25,6 +25,11 @@ export const DESSINS_ICONES = {
   quitterPleinEcran: 'M8 3h2v7H3V8h5V3Zm6 0h2v5h5v2h-7V3ZM3 14h7v7H8v-5H3v-2Zm11 0h7v2h-5v5h-2v-7Z',
   document: 'M6 2h9l5 5v15H6V2Zm2 2v16h10V8h-4V4H8Zm2 8h6v2h-6v-2Zm0 4h6v2h-6v-2Z',
   ajouter: 'M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z',
+  virageGauche: 'M16 22v-8a2 2 0 0 0-2-2H7.8l3.6 3.6L10 17l-6-6 6-6 1.4 1.4L7.8 10H14a4 4 0 0 1 4 4v8h-2Z',
+  virageDroite: 'M8 22v-8a2 2 0 0 1 2-2h6.2l-3.6 3.6L14 17l6-6-6-6-1.4 1.4L16.2 10H10a4 4 0 0 0-4 4v8H8Z',
+  toutDroit: 'M11 22V7.8L6.4 12.4 5 11l7-7 7 7-1.4 1.4L13 7.8V22h-2Z',
+  demiTour: 'M8 22V9a4 4 0 0 1 8 0v3h2.5L15 16.5 11.5 12H14V9a2 2 0 0 0-4 0v13H8Z',
+  arrivee: 'M5 3h2v1.5h11l-2 4 2 4H7V21H5V3Z',
 } as const
 
 export type NomIcone = keyof typeof DESSINS_ICONES
