@@ -4,36 +4,36 @@ import { storeToRefs } from 'pinia'
 import ChampSaisie from '@/components/interface/ChampSaisie.vue'
 import GroupeRadios from '@/components/interface/GroupeRadios.vue'
 import {
-  MESSAGE_KILOMETRAGE_INVALIDE,
-  kilometrageValide,
+  MESSAGE_AUTONOMIE_INVALIDE,
+  autonomieValide,
   useVehiculeStore,
   type EnergieVehicule,
 } from '@/stores/vehicule'
 
-/** « Mon véhicule » : motorisation et kilométrage, gardés sur ce téléphone. */
+/** « Mon véhicule » : motorisation et autonomie, gardées sur ce téléphone. */
 const magasinVehicule = useVehiculeStore()
-const { energie, kilometrage, erreur } = storeToRefs(magasinVehicule)
+const { energie, autonomie, erreur } = storeToRefs(magasinVehicule)
 
 const optionsEnergie = [
   { label: 'Thermique', value: 'thermique', hint: 'Essence ou diesel.' },
-  { label: 'Électrique', value: 'electrique' },
+  { label: 'Électrique', value: 'electrique', hint: 'Par exemple une Ami ou une Topolino.' },
 ]
-const kilometrageSaisi = ref(kilometrage.value === null ? '' : String(kilometrage.value))
-const erreurKilometrage = ref('')
+const autonomieSaisie = ref(autonomie.value === null ? '' : String(autonomie.value))
+const erreurAutonomie = ref('')
 
-function saisirKilometrage(valeur: string | number | undefined): void {
-  kilometrageSaisi.value = String(valeur ?? '')
-  if (kilometrageSaisi.value.trim() === '') {
-    erreurKilometrage.value = ''
+function saisirAutonomie(valeur: string | number | undefined): void {
+  autonomieSaisie.value = String(valeur ?? '')
+  if (autonomieSaisie.value.trim() === '') {
+    erreurAutonomie.value = ''
     return
   }
-  const kilometrageSaisiValide = kilometrageValide(kilometrageSaisi.value)
-  if (kilometrageSaisiValide === null) {
-    erreurKilometrage.value = MESSAGE_KILOMETRAGE_INVALIDE
+  const autonomieSaisieValide = autonomieValide(autonomieSaisie.value)
+  if (autonomieSaisieValide === null) {
+    erreurAutonomie.value = MESSAGE_AUTONOMIE_INVALIDE
     return
   }
-  erreurKilometrage.value = ''
-  magasinVehicule.choisirKilometrage(kilometrageSaisiValide)
+  erreurAutonomie.value = ''
+  magasinVehicule.choisirAutonomie(autonomieSaisieValide)
 }
 </script>
 
@@ -43,25 +43,25 @@ function saisirKilometrage(valeur: string | number | undefined): void {
     <p class="texte-petit">Ces informations restent gardées sur ce téléphone.</p>
     <GroupeRadios
       name="energie-vehicule"
-      legend="Ma voiture est…"
+      legend="Mon véhicule est…"
       :model-value="energie ?? ''"
       :options="optionsEnergie"
       @update:model-value="(valeur) => magasinVehicule.choisirEnergie(valeur as EnergieVehicule)"
     />
     <ChampSaisie
-      id="kilometrage-vehicule"
-      :model-value="kilometrageSaisi"
-      label="Kilométrage de ma voiture, en km"
-      indication="Le chiffre du compteur, par exemple 12500."
-      :message-erreur="erreurKilometrage || erreur || undefined"
+      id="autonomie-vehicule"
+      :model-value="autonomieSaisie"
+      label="Autonomie de mon véhicule, en km"
+      indication="La distance que je peux faire avec un plein ou une charge, par exemple 75."
+      :message-erreur="erreurAutonomie || erreur || undefined"
       type="text"
       inputmode="numeric"
       autocomplete="off"
-      @update:model-value="saisirKilometrage"
+      @update:model-value="saisirAutonomie"
     />
-    <p v-if="energie !== null && kilometrage !== null" id="vehicule-enregistre" role="status">
+    <p v-if="energie !== null && autonomie !== null" id="vehicule-enregistre" role="status">
       Véhicule enregistré : {{ energie === 'electrique' ? 'électrique' : 'thermique' }},
-      {{ kilometrage.toLocaleString('fr-FR') }} km.
+      {{ autonomie.toLocaleString('fr-FR') }} km d’autonomie.
     </p>
   </section>
 </template>

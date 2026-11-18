@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { kilometrageValide, useVehiculeStore } from '../vehicule'
+import { autonomieValide, useVehiculeStore } from '../vehicule'
 import { simulerLocalStorage } from '@/__tests__/stockage-simule'
 
 describe('magasin du véhicule', () => {
@@ -12,26 +12,27 @@ describe('magasin du véhicule', () => {
   it('ne sait rien du véhicule tant que la personne ne l’a pas dit', () => {
     const magasin = useVehiculeStore()
     expect(magasin.energie).toBeNull()
-    expect(magasin.kilometrage).toBeNull()
+    expect(magasin.autonomie).toBeNull()
   })
 
-  it('garde la motorisation et le kilométrage sur l’appareil, et les retrouve', () => {
+  it('garde la motorisation et l’autonomie sur l’appareil, et les retrouve', () => {
     const magasin = useVehiculeStore()
     magasin.choisirEnergie('electrique')
-    magasin.choisirKilometrage(12500)
+    magasin.choisirAutonomie(75)
     expect(localStorage.getItem('gladys:vehicule-energie')).toBe('"electrique"')
     setActivePinia(createPinia())
     const retrouve = useVehiculeStore()
     expect(retrouve.energie).toBe('electrique')
-    expect(retrouve.kilometrage).toBe(12500)
+    expect(retrouve.autonomie).toBe(75)
   })
 
-  it('accepte les espaces dans le kilométrage et refuse le reste', () => {
-    expect(kilometrageValide('12 500')).toBe(12500)
-    expect(kilometrageValide('0')).toBe(0)
-    expect(kilometrageValide('-5')).toBeNull()
-    expect(kilometrageValide('12,5')).toBeNull()
-    expect(kilometrageValide('abc')).toBeNull()
-    expect(kilometrageValide('1000000')).toBeNull()
+  it('accepte une autonomie de 1 à 999 km et refuse le reste', () => {
+    expect(autonomieValide('75')).toBe(75)
+    expect(autonomieValide(' 7 5 ')).toBe(75)
+    expect(autonomieValide('0')).toBeNull()
+    expect(autonomieValide('-5')).toBeNull()
+    expect(autonomieValide('12,5')).toBeNull()
+    expect(autonomieValide('abc')).toBeNull()
+    expect(autonomieValide('1000')).toBeNull()
   })
 })

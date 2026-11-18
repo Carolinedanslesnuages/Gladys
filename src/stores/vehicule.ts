@@ -4,24 +4,28 @@ import { ecrire, lire } from '@/services/stockage'
 
 export type EnergieVehicule = 'thermique' | 'electrique'
 
-export const KILOMETRAGE_MAXIMAL = 999999
+export const AUTONOMIE_MINIMALE_KM = 1
+export const AUTONOMIE_MAXIMALE_KM = 999
 
-export const MESSAGE_KILOMETRAGE_INVALIDE = `Indiquez un nombre entier de kilomètres entre 0 et ${KILOMETRAGE_MAXIMAL}, par exemple 12500.`
+export const MESSAGE_AUTONOMIE_INVALIDE = `Indiquez un nombre entier de kilomètres entre ${AUTONOMIE_MINIMALE_KM} et ${AUTONOMIE_MAXIMALE_KM}, par exemple 75.`
 export const MESSAGE_STOCKAGE_VEHICULE_PLEIN =
   'L’appareil n’a pas pu enregistrer votre véhicule : son stockage est plein ou désactivé.'
 
-/** Kilométrage saisi (espaces tolérés) : un entier de 0 à 999 999, sinon `null`. */
-export function kilometrageValide(saisie: string): number | null {
+/** Autonomie saisie (espaces tolérés) : un entier de 1 à 999 km, sinon `null`. */
+export function autonomieValide(saisie: string): number | null {
   const chiffres = saisie.replace(/\s/g, '')
   if (!/^\d+$/.test(chiffres)) return null
-  const kilometrage = Number(chiffres)
-  return kilometrage <= KILOMETRAGE_MAXIMAL ? kilometrage : null
+  const autonomie = Number(chiffres)
+  return autonomie >= AUTONOMIE_MINIMALE_KM && autonomie <= AUTONOMIE_MAXIMALE_KM ? autonomie : null
 }
 
-/** Le véhicule de la personne (motorisation et kilométrage), gardé sur l'appareil, jamais envoyé. */
+/**
+ * Le véhicule de la personne (voiture sans permis) : motorisation et autonomie, c'est-à-dire la
+ * distance qu'elle parcourt avec un plein ou une charge. Gardé sur l'appareil, jamais envoyé.
+ */
 export const useVehiculeStore = defineStore('vehicule', () => {
   const energie = ref<EnergieVehicule | null>(lire<EnergieVehicule | null>('vehicule-energie', null))
-  const kilometrage = ref<number | null>(lire<number | null>('vehicule-kilometrage', null))
+  const autonomie = ref<number | null>(lire<number | null>('vehicule-autonomie', null))
   const erreur = ref<string | null>(null)
 
   function enregistrer(cle: string, valeur: EnergieVehicule | number): void {
@@ -33,12 +37,12 @@ export const useVehiculeStore = defineStore('vehicule', () => {
     enregistrer('vehicule-energie', nouvelleEnergie)
   }
 
-  function choisirKilometrage(nouveauKilometrage: number): void {
-    kilometrage.value = nouveauKilometrage
-    enregistrer('vehicule-kilometrage', nouveauKilometrage)
+  function choisirAutonomie(nouvelleAutonomie: number): void {
+    autonomie.value = nouvelleAutonomie
+    enregistrer('vehicule-autonomie', nouvelleAutonomie)
   }
 
-  return { energie, kilometrage, erreur, choisirEnergie, choisirKilometrage }
+  return { energie, autonomie, erreur, choisirEnergie, choisirAutonomie }
 })
 
 if (import.meta.hot) import.meta.hot.accept(acceptHMRUpdate(useVehiculeStore, import.meta.hot))
