@@ -102,7 +102,11 @@ onUnmounted(() => magasinConduite.arreter())
       <p v-if="!consigne" id="recherche-position" role="status" class="texte-grand">
         Recherche de votre position…
       </p>
-      <section v-else aria-labelledby="titre-consigne">
+      <section
+        v-else
+        aria-labelledby="titre-consigne"
+        :class="['bandeau-consigne', { 'bandeau-consigne--replie': texteMasque }]"
+      >
         <h2 id="titre-consigne" class="visuellement-cache">Prochaine consigne</h2>
         <p id="consigne-en-cours" :class="['consigne', { 'visuellement-cache': texteMasque }]">{{ consigne.texte }}</p>
         <p id="distance-consigne" :class="['distance-consigne', { 'visuellement-cache': texteMasque }]">
@@ -110,7 +114,7 @@ onUnmounted(() => magasinConduite.arreter())
         </p>
       </section>
       <p id="annonce-consigne" role="status" class="visuellement-cache">{{ annonce }}</p>
-      <div class="commande-voix marge-haut-6">
+      <div class="commande-voix">
         <Bouton
           id="bouton-voix"
           type="button"
@@ -131,7 +135,7 @@ onUnmounted(() => magasinConduite.arreter())
       </div>
     </template>
 
-    <div v-if="!trajetAbsent" class="carte-conduite marge-haut-6">
+    <div v-if="!trajetAbsent" class="carte-conduite">
       <CarteTrajet
         :trace="traceDuTrajet"
         :depart="departDuTrajet"
@@ -146,7 +150,7 @@ onUnmounted(() => magasinConduite.arreter())
       type="button"
       variante="secondaire"
       icone="arreter"
-      class="marge-haut-6"
+      class="bouton-arret"
       :label="trajetAbsent ? 'Retour à la préparation du trajet' : 'Arrêter le trajet'"
       @click="arreterLeTrajet"
     />
@@ -154,12 +158,36 @@ onUnmounted(() => magasinConduite.arreter())
 </template>
 
 <style scoped>
+/* Écran de conduite façon GPS : bandeau de consigne en haut, carte qui occupe le reste,
+   commandes (voix, arrêt) en bas, à portée de pouce. */
 .conduite {
-  padding-block: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 100dvh;
+  padding-block: 0.5rem;
+}
+.conduite h1 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--texte-discret);
+}
+.bandeau-consigne {
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background: var(--vert-route-fonce);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+}
+/* Voix active : le bandeau se réduit à une fine barre, la carte gagne la place. */
+.bandeau-consigne--replie {
+  padding: 0;
+  height: 0.5rem;
+  overflow: hidden;
 }
 /* Lisible d'un coup d'œil, même à 320 px de large : le texte revient à la ligne. */
 .consigne {
-  margin: 1rem 0 0.5rem;
+  margin: 0 0 0.25rem;
   font-size: clamp(2rem, 9vw, 3.5rem);
   font-weight: 800;
   line-height: 1.15;
@@ -169,7 +197,7 @@ onUnmounted(() => magasinConduite.arreter())
   margin: 0;
   font-size: clamp(1.75rem, 8vw, 3rem);
   font-weight: 700;
-  color: var(--vert-route-fonce);
+  color: #ffffff;
 }
 .commande-voix {
   display: flex;
@@ -182,8 +210,13 @@ onUnmounted(() => magasinConduite.arreter())
 }
 .carte-conduite {
   position: relative;
-  height: 60vh;
+  flex: 1;
   min-height: 18rem;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+.bouton-arret {
+  width: 100%;
 }
 .position-indisponible {
   border: 2px solid var(--erreur);
