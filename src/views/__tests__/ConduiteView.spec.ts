@@ -24,7 +24,10 @@ const routeur = createRouter({
 
 async function monterEnConduite() {
   await routeur.push('/conduite')
-  const ecran = mount(ConduiteView, { attachTo: document.body, global: { plugins: [routeur] } })
+  const ecran = mount(ConduiteView, {
+    attachTo: document.body,
+    global: { plugins: [routeur], stubs: { CarteTrajet: { template: '<div class="carte-simulee"></div>' } } },
+  })
   await flushPromises()
   return ecran
 }
@@ -216,6 +219,20 @@ describe('Écran de conduite', () => {
       expect(ecran.find('#consigne-en-cours').text()).toBe('Tournez à droite vers Saint-Martin')
       expect(ecran.find('#consigne-en-cours').classes()).toContain('consigne')
       expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecran.unmount()
+    })
+
+    it('voix active : la carte est visible et le texte n’occupe pas l’écran', async () => {
+      demarrer()
+      const ecran = await monterEnConduite()
+      surPosition({ coords: { latitude: 45, longitude: 4 } })
+      await flushPromises()
+      expect(ecran.find('.carte-conduite').exists()).toBe(true)
+      expect(ecran.find('#consigne-en-cours').classes()).toContain('visuellement-cache')
+      expect(ecran.find('#distance-consigne').classes()).toContain('visuellement-cache')
+      await ecran.find('#bouton-voix').trigger('click')
+      expect(ecran.find('#consigne-en-cours').classes()).not.toContain('visuellement-cache')
+      expect(ecran.find('.carte-conduite').exists()).toBe(true)
       ecran.unmount()
     })
 
