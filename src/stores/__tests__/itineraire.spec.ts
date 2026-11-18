@@ -6,15 +6,15 @@ import { simulerLocalStorage } from '@/__tests__/stockage-simule'
 
 const lieu = (libelle: string): Lieu => ({ libelle, latitude: 45, longitude: 4 })
 
-const reponseIgn = (metres: number, departementaleMetres: number) =>
+const reponseIgn = (metres: number, departementaleFortTraficMetres: number) =>
   new Response(
     JSON.stringify({
       distance: metres,
       portions: [
         {
           steps: [
-            { distance: metres - departementaleMetres, attributes: { cpx_numero: '' } },
-            { distance: departementaleMetres, attributes: { cpx_numero: 'D12' } },
+            { distance: metres - departementaleFortTraficMetres, attributes: { cpx_numero: '' } },
+            { distance: departementaleFortTraficMetres, attributes: { cpx_numero: 'D12' } },
           ],
         },
       ],
