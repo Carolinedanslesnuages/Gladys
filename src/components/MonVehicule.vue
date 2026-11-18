@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import Bouton from '@/components/interface/Bouton.vue'
 import ChampSaisie from '@/components/interface/ChampSaisie.vue'
 import GroupeRadios from '@/components/interface/GroupeRadios.vue'
 import {
@@ -10,7 +11,13 @@ import {
   type EnergieVehicule,
 } from '@/stores/vehicule'
 
-/** « Mon véhicule » : motorisation et autonomie, gardées sur ce téléphone. */
+/**
+ * « Mon véhicule » : motorisation (gardée sur ce téléphone) et autonomie restante (redemandée à
+ * chaque ouverture). Avec `avecValidation`, un bouton referme la question posée à l'ouverture.
+ */
+defineProps<{ avecValidation?: boolean }>()
+const emit = defineEmits<{ termine: [] }>()
+
 const magasinVehicule = useVehiculeStore()
 const { energie, autonomie, erreur } = storeToRefs(magasinVehicule)
 
@@ -40,7 +47,7 @@ function saisirAutonomie(valeur: string | number | undefined): void {
 <template>
   <section id="mon-vehicule" class="marge-bas-8" aria-labelledby="titre-mon-vehicule">
     <h2 id="titre-mon-vehicule" class="titre-5">Mon véhicule</h2>
-    <p class="texte-petit">Ces informations restent gardées sur ce téléphone.</p>
+    <p class="texte-petit">Ces informations restent sur ce téléphone.</p>
     <GroupeRadios
       name="energie-vehicule"
       legend="Mon véhicule est…"
@@ -51,8 +58,8 @@ function saisirAutonomie(valeur: string | number | undefined): void {
     <ChampSaisie
       id="autonomie-vehicule"
       :model-value="autonomieSaisie"
-      label="Autonomie de mon véhicule, en km"
-      indication="La distance que je peux faire avec un plein ou une charge, par exemple 75."
+      label="Autonomie restante de mon véhicule, en km"
+      indication="La distance que je peux encore faire avec la charge ou le plein actuel, par exemple 75. Elle est redemandée à chaque ouverture."
       :message-erreur="erreurAutonomie || erreur || undefined"
       type="text"
       inputmode="numeric"
@@ -60,8 +67,15 @@ function saisirAutonomie(valeur: string | number | undefined): void {
       @update:model-value="saisirAutonomie"
     />
     <p v-if="energie !== null && autonomie !== null" id="vehicule-enregistre" role="status">
-      Véhicule enregistré : {{ energie === 'electrique' ? 'électrique' : 'thermique' }},
-      {{ autonomie.toLocaleString('fr-FR') }} km d’autonomie.
+      Véhicule noté : {{ energie === 'electrique' ? 'électrique' : 'thermique' }},
+      {{ autonomie.toLocaleString('fr-FR') }} km d’autonomie restante.
     </p>
+    <Bouton
+      v-if="avecValidation"
+      type="button"
+      :label="autonomie === null ? 'Plus tard' : 'Valider et préparer mon trajet'"
+      :variante="autonomie === null ? 'secondaire' : 'principal'"
+      @click="emit('termine')"
+    />
   </section>
 </template>

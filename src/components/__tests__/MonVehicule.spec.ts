@@ -23,7 +23,7 @@ describe('Mon véhicule', () => {
     await ecran.find('#energie-vehicule-electrique').setValue(true)
     await ecran.find('#autonomie-vehicule').setValue('75')
     expect(localStorage.getItem('gladys:vehicule-energie')).toBe('"electrique"')
-    expect(localStorage.getItem('gladys:vehicule-autonomie')).toBe('75')
+    expect(localStorage.getItem('gladys:vehicule-autonomie')).toBeNull()
     expect(ecran.find('#vehicule-enregistre').text()).toContain('électrique')
     expect(ecran.find('#vehicule-enregistre').text()).toContain('75 km d’autonomie')
   })
@@ -33,6 +33,15 @@ describe('Mon véhicule', () => {
     await ecran.find('#autonomie-vehicule').setValue('beaucoup')
     expect(ecran.text()).toContain('Indiquez un nombre entier de kilomètres')
     expect(localStorage.getItem('gladys:vehicule-autonomie')).toBeNull()
+  })
+
+  it('posée à l’ouverture, se referme par un bouton « Plus tard » ou « Valider »', async () => {
+    const ecran = mount(MonVehicule, { props: { avecValidation: true } })
+    expect(ecran.find('button').text()).toBe('Plus tard')
+    await ecran.find('#autonomie-vehicule').setValue('75')
+    expect(ecran.find('button').text()).toContain('Valider')
+    await ecran.find('button').trigger('click')
+    expect(ecran.emitted('termine')).toHaveLength(1)
   })
 
   it('n’a aucune violation d’accessibilité', async () => {
