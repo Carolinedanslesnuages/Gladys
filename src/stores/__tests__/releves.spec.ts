@@ -19,7 +19,7 @@ describe('Relevés enregistrés sur l’appareil', () => {
   })
 
   it('relit les relevés au démarrage (après fermeture, ou hors connexion)', () => {
-    simulerLocalStorage({ '__SLUG__:releves': JSON.stringify([{ id: 'a', texte: 'Déjà saisi', saisiLe: '2026-11-16T10:00:00Z' }]) })
+    simulerLocalStorage({ 'leon:releves': JSON.stringify([{ id: 'a', texte: 'Déjà saisi', saisiLe: '2026-11-16T10:00:00Z' }]) })
     expect(useRelevesStore().releves.map((releve) => releve.texte)).toEqual(['Déjà saisi'])
   })
 

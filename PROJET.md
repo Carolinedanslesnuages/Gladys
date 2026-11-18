@@ -11,4 +11,4 @@
 | Lancer | `npm run dev` |
 
 ## Stories réalisées
-_(aucune pour l'instant)_
+- #2 Saisir mon départ et mon arrivée — [fiche](revues/story-2-saisir-mon-depart-et-mon-arrivee.md)

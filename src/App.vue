@@ -4,6 +4,10 @@ import EtatConnexion from '@/components/EtatConnexion.vue'
 import MiseAJour from '@/components/MiseAJour.vue'
 
 const logoText = ['République', 'Française']
+const liensRapides = [
+  { label: 'Préparer mon trajet', to: '/', icon: 'fr-icon-road-map-line' },
+  { label: 'Relevés', to: '/releves', icon: 'fr-icon-file-text-line' },
+]
 </script>
 
 <template>
@@ -11,6 +15,7 @@ const logoText = ['République', 'Française']
     service-title="LÉON"
     service-description=""
     :logo-text="logoText"
+    :quick-links="liensRapides"
     home-to="/"
   />
   <EtatConnexion />
