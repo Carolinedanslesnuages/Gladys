@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import ChampLieu from '@/components/ChampLieu.vue'
 import { ErreurReseau, lieuLePlusProche, type Lieu } from '@/services/adresses'
 import { PositionRefusee, positionActuelle } from '@/services/position'
 import { NOMBRE_DE_TRAJETS_GARDES, useTrajetsStore, type Trajet } from '@/stores/trajets'
+import { SEUILS_DE_DETOUR, useItineraireStore } from '@/stores/itineraire'
 
 const magasinTrajets = useTrajetsStore()
 const { accord, trajetsRecents, erreur: erreurEnregistrement } = storeToRefs(magasinTrajets)
+
+const magasinItineraire = useItineraireStore()
+const { seuilDetour, resultat, calculEnCours, erreur: erreurItineraire } = storeToRefs(magasinItineraire)
+const optionsDeDetour = SEUILS_DE_DETOUR.map((seuil) => ({
+  label: `${seuil} % de distance en plus au maximum`,
+  value: seuil,
+}))
 
 const depart = ref<Lieu | null>(null)
 const arrivee = ref<Lieu | null>(null)
@@ -32,6 +40,27 @@ onUnmounted(() => {
   window.removeEventListener('online', suivreLeReseau)
   window.removeEventListener('offline', suivreLeReseau)
 })
+
+// Un itinéraire calculé ne vaut que pour le départ et l'arrivée qui l'ont produit.
+watch([depart, arrivee], () => magasinItineraire.oublier())
+
+const enKilometres = (metres: number) => `${(metres / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`
+
+const annonceItineraire = computed(() => {
+  if (calculEnCours.value) return 'Calcul de votre itinéraire…'
+  if (!resultat.value) return ''
+  const { itineraire } = resultat.value
+  const departementale =
+    itineraire.departementaleMetres > 0
+      ? `dont ${enKilometres(itineraire.departementaleMetres)} sur départementale`
+      : 'sans départementale'
+  return `Itinéraire calculé : ${enKilometres(itineraire.distanceMetres)}, sans autoroute ni voie rapide, ${departementale}.`
+})
+
+async function calculerMonItineraire(): Promise<void> {
+  if (!depart.value || !arrivee.value || !enLigne.value) return
+  await magasinItineraire.calculer(depart.value, arrivee.value)
+}
 
 const descriptionTrajet = (lieuDepart: Lieu, lieuArrivee: Lieu) => `de ${lieuDepart.libelle} à ${lieuArrivee.libelle}`
 
@@ -149,6 +178,58 @@ async function effacer(confirme: boolean): Promise<void> {
   </form>
 
   <p id="annonce-trajet" role="status" class="fr-sr-only">{{ annonce }}</p>
+
+  <section v-if="depart && arrivee" class="fr-mb-4w" aria-labelledby="titre-itineraire">
+    <h2 id="titre-itineraire" class="fr-h5">Mon itinéraire</h2>
+    <p>Il ne passe jamais par une autoroute ni une voie rapide.</p>
+    <DsfrRadioButtonSet
+      name="seuil-detour"
+      legend="Détour accepté pour éviter les départementales"
+      hint="Votre choix reste gardé sur ce téléphone."
+      :model-value="seuilDetour"
+      :options="optionsDeDetour"
+      @update:model-value="(nouveauSeuil: string | number | boolean | undefined) => magasinItineraire.choisirSeuil(Number(nouveauSeuil))"
+    />
+    <p v-if="!enLigne" class="fr-mb-2w">Le calcul d’itinéraire a besoin du réseau. Il sera possible dès son retour.</p>
+    <DsfrButton
+      type="button"
+      size="lg"
+      icon="fr-icon-road-map-line"
+      :label="calculEnCours ? 'Calcul de votre itinéraire…' : 'Calculer mon itinéraire'"
+      :disabled="!enLigne || calculEnCours"
+      @click="calculerMonItineraire"
+    />
+
+    <div id="resultat-itineraire" role="status" class="fr-mt-3w">
+      <DsfrAlert v-if="erreurItineraire" type="error" small :description="erreurItineraire" />
+      <template v-if="resultat">
+        <DsfrAlert
+          v-if="!resultat.sansDepartementalePossible"
+          type="warning"
+          small
+          class="fr-mb-2w"
+          description="Aucun itinéraire sans départementale n’existe pour ce trajet. Voici le trajet le plus sûr, avec le moins de départementale possible."
+        />
+        <DsfrAlert
+          v-else-if="resultat.detourTropLong"
+          type="info"
+          small
+          class="fr-mb-2w"
+          :description="`Un trajet sans départementale existe, mais son détour dépasse ${seuilDetour} %. Voici le trajet le plus court sans autoroute.`"
+        />
+        <dl class="fr-mb-0">
+          <dt>Distance totale</dt>
+          <dd>{{ enKilometres(resultat.itineraire.distanceMetres) }}</dd>
+          <dt>Sur départementale</dt>
+          <dd v-if="resultat.itineraire.departementaleMetres > 0">
+            {{ enKilometres(resultat.itineraire.departementaleMetres) }}
+          </dd>
+          <dd v-else>Aucun kilomètre : trajet sans départementale</dd>
+        </dl>
+      </template>
+      <p class="fr-sr-only">{{ annonceItineraire }}</p>
+    </div>
+  </section>
   <DsfrAlert v-if="erreurEnregistrement" type="error" small :description="erreurEnregistrement" class="fr-mb-2w" />
 
   <section v-if="trajetEnAttenteDAccord" class="fr-mb-4w fr-p-3w question-accord" aria-labelledby="titre-accord">
@@ -208,6 +289,12 @@ async function effacer(confirme: boolean): Promise<void> {
 </template>
 
 <style scoped>
+dt {
+  font-weight: 700;
+}
+dd {
+  margin: 0 0 1rem;
+}
 .question-accord {
   border: 1px solid var(--border-default-grey);
 }
