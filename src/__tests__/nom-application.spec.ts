@@ -47,7 +47,7 @@ describe('Nom de l’application : GLADYS', () => {
     expect(application.find('header').exists()).toBe(false)
     expect(application.find('footer').exists()).toBe(false)
     expect(application.find('main#contenu').exists()).toBe(true)
-    await application.find('#bouton-menu').trigger('click')
+    await application.find('#bouton-a-propos').trigger('click')
     await flushPromises()
     expect(document.querySelector('dialog')?.textContent).toContain('Sans permis, en toute sécurité')
     application.unmount()

@@ -375,7 +375,7 @@ async function effacer(confirme: boolean): Promise<void> {
   <h1 class="fr-sr-only">Préparer mon trajet</h1>
 
   <div ref="ecranCarte" class="ecran-carte">
-    <!-- Avant la carte dans la page : au clavier, on arrive d'abord sur « Où allez-vous ? », puis « Menu ». -->
+    <!-- Avant la carte dans la page : au clavier, on arrive d'abord sur « Où allez-vous ? ». -->
     <div class="haut-de-carte">
       <form
         id="barre-destination"
@@ -497,9 +497,6 @@ async function effacer(confirme: boolean): Promise<void> {
           />
         </div>
       </form>
-      <div class="fond-du-menu">
-        <MenuAPropos />
-      </div>
     </div>
     <CarteTrajet
       :trace="traceSurLaCarte"
@@ -577,6 +574,10 @@ async function effacer(confirme: boolean): Promise<void> {
       aria-controls="detail-du-trajet mes-trajets-recents"
       @click="basculerLeDetail"
     />
+    <!-- Plus de menu sur la carte : « À propos » (accessibilité, mentions légales, relevés) reste ici. -->
+    <div class="fr-mb-3w">
+      <MenuAPropos />
+    </div>
     <div v-show="detailAffiche" id="detail-du-trajet">
       <section v-if="depart && arrivee" class="fr-mb-4w" aria-labelledby="titre-itineraire">
         <h2 id="titre-itineraire" ref="titreItineraire" tabindex="-1" class="fr-h5">
@@ -867,7 +868,7 @@ async function effacer(confirme: boolean): Promise<void> {
   height: calc(100dvh - var(--haut-ecran-carte, 0px));
   min-height: 20rem;
 }
-/* Posé en haut de la carte : la barre à gauche, « Menu » à droite ; la carte reste touchable entre les deux. */
+/* Posé en haut de la carte : la barre à gauche ; la carte reste touchable à côté. */
 .haut-de-carte {
   position: absolute;
   inset: 0.5rem 0.5rem auto;
@@ -880,12 +881,6 @@ async function effacer(confirme: boolean): Promise<void> {
 }
 .haut-de-carte > * {
   pointer-events: auto;
-}
-.fond-du-menu {
-  flex: none;
-  margin-left: auto;
-  background: var(--background-default-grey);
-  box-shadow: 0 2px 8px rgb(0 0 18 / 20%);
 }
 .panneau-resume {
   display: flex;

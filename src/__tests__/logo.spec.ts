@@ -31,7 +31,7 @@ describe('Logo de Gladys', () => {
       attachTo: document.body,
     })
     await application.vm.$nextTick()
-    await application.find('#bouton-menu').trigger('click')
+    await application.find('#bouton-a-propos').trigger('click')
     await flushPromises()
     const imageLogo = document.querySelector('dialog img.logo-gladys')
     expect(imageLogo?.getAttribute('alt')).toBe('Gladys')

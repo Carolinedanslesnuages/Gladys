@@ -116,17 +116,16 @@ describe('Écran « Préparer mon trajet »', () => {
       ecran.unmount()
     })
 
-    it('le bouton « Menu » est posé sur la carte, après la barre au clavier', () => {
+    it('Demande #30 : plus de menu sur la carte ; « À propos » reste toujours affiché sous la carte', () => {
       const ecran = monter()
-      const menu = ecran.find('#bouton-menu')
-      expect(menu.text()).toBe('Menu')
-      const barre = ecran.find('#barre-destination').element
+      expect(ecran.find('#zone-carte .fr-icon-menu-fill').exists()).toBe(false)
+      expect(ecran.findAll('button').some((bouton) => bouton.text() === 'Menu')).toBe(false)
+      const aPropos = ecran.find('#bouton-a-propos')
+      expect(aPropos.text()).toBe('À propos, accessibilité et relevés')
+      expect(aPropos.isVisible()).toBe(true)
       const carte = ecran.find('#carte-trajet').element
       expect(
-        barre.compareDocumentPosition(menu.element) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy()
-      expect(
-        menu.element.compareDocumentPosition(carte) & Node.DOCUMENT_POSITION_FOLLOWING,
+        carte.compareDocumentPosition(aPropos.element) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy()
       ecran.unmount()
     })
