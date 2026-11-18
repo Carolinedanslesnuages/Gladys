@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Gladys">
+  <title>Gladys</title>
+  <g fill="none" stroke="#000091" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="46" cy="58" r="22"/>
+    <path d="M68 36 V88 Q68 106 48 106 Q36 106 30 100"/>
+  </g>
+  <!-- étoile à quatre branches, en haut à droite du « g » -->
+  <path transform="translate(-105 -4)" fill="#E1000F" d="M203 8 Q206 25 223 28 Q206 31 203 48 Q200 31 183 28 Q200 25 203 8 Z"/>
+</svg>
