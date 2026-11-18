@@ -4,15 +4,18 @@ import { storeToRefs } from 'pinia'
 import ChampLieu from '@/components/ChampLieu.vue'
 import CarteTrajet from '@/components/CarteTrajet.vue'
 import MenuAPropos from '@/components/MenuAPropos.vue'
+import MonVehicule from '@/components/MonVehicule.vue'
 import Alerte from '@/components/interface/Alerte.vue'
 import Bouton from '@/components/interface/Bouton.vue'
 import ChampSaisie from '@/components/interface/ChampSaisie.vue'
+import FenetreModale from '@/components/interface/FenetreModale.vue'
 import GroupeRadios from '@/components/interface/GroupeRadios.vue'
 import Pastille from '@/components/interface/Pastille.vue'
 import { ErreurReseau, lieuLePlusProche, type Lieu } from '@/services/adresses'
 import { PositionRefusee, positionActuelle } from '@/services/position'
 import { NOMBRE_DE_TRAJETS_GARDES, useTrajetsStore, type Trajet } from '@/stores/trajets'
 import { SEUILS_DE_DETOUR, useItineraireStore } from '@/stores/itineraire'
+import { avertissementDAutonomie, useVehiculeStore } from '@/stores/vehicule'
 import { LONGUEUR_MAXIMALE_DU_NOM, useFavorisStore, type Favori } from '@/stores/favoris'
 import { useDureeStore } from '@/stores/duree'
 import {
@@ -170,6 +173,24 @@ const heureMaintenant = () => {
   const maintenant = new Date()
   return `${String(maintenant.getHours()).padStart(2, '0')}:${String(maintenant.getMinutes()).padStart(2, '0')}`
 }
+
+// Véhicule : l'autonomie restante est demandée à chaque ouverture, puis comparée au trajet.
+const magasinVehicule = useVehiculeStore()
+const questionVehiculeOuverte = ref(true)
+const avertissementAutonomie = computed(() =>
+  resultat.value
+    ? avertissementDAutonomie(
+        resultat.value.itineraire.distanceMetres,
+        magasinVehicule.autonomie,
+        magasinVehicule.energie,
+      )
+    : null,
+)
+// La carte remplit l'écran sous ce qui la précède : on recalcule quand un message apparaît ou disparaît.
+watch([questionVehiculeOuverte, avertissementAutonomie], async () => {
+  await nextTick()
+  ajusterLaHauteurDeLaCarte()
+})
 
 // Une fois l'itinéraire calculé, la barre se replie en une ligne : la carte reste dégagée.
 const barreDeplieeALaMain = ref(false)
@@ -485,6 +506,22 @@ async function effacer(confirme: boolean): Promise<void> {
 
 <template>
   <h1 class="visuellement-cache">Préparer mon trajet</h1>
+
+  <FenetreModale
+    v-if="questionVehiculeOuverte"
+    titre="Mon véhicule"
+    @close="questionVehiculeOuverte = false"
+  >
+    <MonVehicule dans-une-fenetre />
+  </FenetreModale>
+  <Alerte
+    v-if="avertissementAutonomie"
+    id="avertissement-autonomie"
+    type="warning"
+    :description="avertissementAutonomie"
+    role="status"
+    class="marge-bas-4"
+  />
 
   <div ref="ecranCarte" class="ecran-carte">
     <!-- Avant la carte dans la page : au clavier, on arrive d'abord sur « Où allez-vous ? ». -->
@@ -1059,6 +1096,8 @@ async function effacer(confirme: boolean): Promise<void> {
         sur ce téléphone.
       </p>
     </div>
+
+    <MonVehicule v-if="!questionVehiculeOuverte" v-show="detailAffiche" />
   </div>
 </template>
 
