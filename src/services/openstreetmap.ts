@@ -9,6 +9,8 @@ import {
   avecLesEtapesDuTrajetRetenu,
   choisirItineraire,
   estDepartementale,
+  estRouteAFortTrafic,
+  IMPORTANCE_ROUTE_CALME,
   itineraireDepuisTroncons,
   nommerLesVillages,
   regrouperEnEtapes,
@@ -47,6 +49,7 @@ export interface TronconOpenStreetMap {
   road_class?: string
   names?: string[]
   begin_shape_index?: number
+  end_shape_index?: number
 }
 
 interface Trajet {
@@ -66,6 +69,15 @@ interface ReponseTrajet {
  */
 const AUTRES_CHEMINS_DEMANDES = 2
 
+/**
+ * Contournement : on interdit au calculateur un petit carré au milieu de chaque tronçon à fort
+ * trafic du meilleur chemin (loin des carrefours, pour pouvoir encore traverser ces routes).
+ * Le service limite la taille totale des zones interdites : on garde les plus longs tronçons.
+ */
+const DEMI_COTE_DE_LA_ZONE_INTERDITE_METRES = 15
+const ZONES_INTERDITES_AU_PLUS = 60
+const METRES_PAR_DEGRE_DE_LATITUDE = 111320
+
 interface ReponseAttributs {
   edges?: TronconOpenStreetMap[]
   shape?: string
@@ -76,6 +88,8 @@ export interface TrajetPossible {
   itineraire: Itineraire
   tronconsRecus: TronconRecu[]
   debutsDesTroncons: (PointDuTrace | null)[]
+  /** Le milieu des tronçons à fort trafic, les plus longs d'abord : là où un contournement doit passer ailleurs. */
+  milieuxDesTronconsAFortTrafic: PointDuTrace[]
 }
 
 /** Décode un tracé OpenStreetMap (polyligne codée, précision 6 décimales) en points latitude et longitude. */
@@ -107,15 +121,46 @@ export function decoderTrace(traceCodee: string): PointDuTrace[] {
 /** Un tronçon OpenStreetMap sous la forme BD TOPO : numéro « D… », nom de rue, vitesse, importance. */
 export function enTronconRecu(tronconOsm: TronconOpenStreetMap): TronconRecu {
   const noms = tronconOsm.names ?? []
+  const importance = tronconOsm.road_class ? IMPORTANCE_PAR_CLASSE_DE_ROUTE[tronconOsm.road_class] : undefined
   return {
     distance: tronconOsm.length * 1000,
     attributes: {
       cpx_numero: noms.find((nom) => estDepartementale(nom)),
       nom_1_gauche: noms.find((nom) => !estDepartementale(nom)),
       vitesse_moyenne_vl: tronconOsm.speed,
-      importance: tronconOsm.road_class ? IMPORTANCE_PAR_CLASSE_DE_ROUTE[tronconOsm.road_class] : undefined,
+      importance,
+      grandAxe: importance !== undefined && importance < IMPORTANCE_ROUTE_CALME,
     },
   }
+}
+
+/** Le milieu d'un tronçon sur le tracé (entre ses deux extrémités s'il est droit), ou `null` s'il est inconnu. */
+export function milieuDuTroncon(tronconOsm: TronconOpenStreetMap, pointsDuTrace: PointDuTrace[]): PointDuTrace | null {
+  const debut = pointsDuTrace[tronconOsm.begin_shape_index ?? -1]
+  const fin = pointsDuTrace[tronconOsm.end_shape_index ?? -1]
+  if (!debut || !fin) return null
+  const ecartDesRangs = (tronconOsm.end_shape_index ?? 0) - (tronconOsm.begin_shape_index ?? 0)
+  if (ecartDesRangs >= 2) return pointsDuTrace[(tronconOsm.begin_shape_index ?? 0) + Math.floor(ecartDesRangs / 2)] ?? null
+  return { latitude: (debut.latitude + fin.latitude) / 2, longitude: (debut.longitude + fin.longitude) / 2 }
+}
+
+/** Petits carrés interdits au calculateur (anneaux longitude, latitude), autour de chaque point. */
+export function zonesInterdites(points: PointDuTrace[]): number[][][] {
+  return points.slice(0, ZONES_INTERDITES_AU_PLUS).map((point) => {
+    const ecartLatitude = DEMI_COTE_DE_LA_ZONE_INTERDITE_METRES / METRES_PAR_DEGRE_DE_LATITUDE
+    const ecartLongitude = ecartLatitude / Math.cos((point.latitude * Math.PI) / 180)
+    const ouest = point.longitude - ecartLongitude
+    const est = point.longitude + ecartLongitude
+    const sud = point.latitude - ecartLatitude
+    const nord = point.latitude + ecartLatitude
+    return [
+      [ouest, sud],
+      [est, sud],
+      [est, nord],
+      [ouest, nord],
+      [ouest, sud],
+    ]
+  })
 }
 
 async function demander<Reponse>(action: string, corps: object): Promise<Reponse> {
@@ -170,7 +215,15 @@ async function decrireLeTrajet(trajet: Trajet): Promise<TrajetPossible | null> {
     shape_match: 'edge_walk',
     costing: PROFIL_VSP,
     filters: {
-      attributes: ['edge.names', 'edge.length', 'edge.speed', 'edge.road_class', 'edge.begin_shape_index', 'shape'],
+      attributes: [
+        'edge.names',
+        'edge.length',
+        'edge.speed',
+        'edge.road_class',
+        'edge.begin_shape_index',
+        'edge.end_shape_index',
+        'shape',
+      ],
       action: 'include',
     },
   })
@@ -182,6 +235,28 @@ async function decrireLeTrajet(trajet: Trajet): Promise<TrajetPossible | null> {
     itineraire: itineraireDepuisTroncons(tronconsRecus, trajet.summary.length * 1000, decoderTrace(traceCodee)),
     tronconsRecus,
     debutsDesTroncons: tronconsOsm.map((tronconOsm) => pointsDesTroncons[tronconOsm.begin_shape_index ?? -1] ?? null),
+    milieuxDesTronconsAFortTrafic: tronconsOsm
+      .filter((_tronconOsm, rang) => estRouteAFortTrafic(tronconsRecus[rang]?.attributes))
+      .sort((premier, second) => second.length - premier.length)
+      .map((tronconOsm) => milieuDuTroncon(tronconOsm, pointsDesTroncons))
+      .filter((milieu): milieu is PointDuTrace => milieu !== null),
+  }
+}
+
+/**
+ * Le meilleur chemin garde du fort trafic : on redemande un trajet qui ne peut plus passer par ces
+ * routes. Sans réponse (service saturé, zones refusées), on garde simplement les chemins déjà connus.
+ */
+async function contourner(depart: Lieu, arrivee: Lieu, meilleurChemin: TrajetPossible): Promise<TrajetPossible | null> {
+  if (meilleurChemin.milieuxDesTronconsAFortTrafic.length === 0) return null
+  try {
+    const reponse = await demander<ReponseTrajet>('route', {
+      ...demandeDeTrajet(depart, arrivee, { use_primary: 0 }),
+      exclude_polygons: zonesInterdites(meilleurChemin.milieuxDesTronconsAFortTrafic),
+    })
+    return await decrireLeTrajet(reponse.trip)
+  } catch {
+    return null
   }
 }
 
@@ -257,6 +332,11 @@ export async function calculerItineraireOpenStreetMap(
     if (cheminDecrit) cheminsDecrits.push(cheminDecrit)
   }
   const distanceMaximale = plusCourt.itineraire.distanceMetres * (1 + seuilDetourPourcent / 100)
+  const meilleurConnu = leMoinsCharge(cheminsDecrits, distanceMaximale) ?? plusCourt
+  if (meilleurConnu.itineraire.departementaleFortTraficMetres > 0) {
+    const contournement = await contourner(depart, arrivee, meilleurConnu)
+    if (contournement) cheminsDecrits.push(contournement)
+  }
   const fuyantLesGrandsAxes = leMoinsCharge(cheminsDecrits, distanceMaximale) ?? plusCourt
   const resultat = choisirItineraire(plusCourt.itineraire, fuyantLesGrandsAxes.itineraire, seuilDetourPourcent)
   const trajetRetenu = resultat.itineraire === plusCourt.itineraire ? plusCourt : fuyantLesGrandsAxes

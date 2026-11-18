@@ -73,6 +73,11 @@ export interface AttributsDuTroncon {
   vitesse_moyenne_vl?: number | string
   insee_commune_gauche?: string
   importance?: number | string
+  /**
+   * OpenStreetMap seulement : route principale ou secondaire (orange ou jaune sur la carte), même
+   * sans numéro « D… » (nationale « N… », grande route sans numéro). L'IGN ne le renseigne pas.
+   */
+  grandAxe?: boolean
 }
 
 export interface TronconRecu {
@@ -108,10 +113,11 @@ const vitesseDeLaRoute = (vitesseBrute: number | string | undefined): number | n
 export const estDepartementale = (numeroDeRoute: string | undefined) => /^(R?D|M)\s?\d/i.test(numeroDeRoute ?? '')
 
 /**
- * Départementale à fort trafic : importance de 1 à 3. Une importance inconnue compte comme un
- * fort trafic, par prudence.
+ * Route à fort trafic : un grand axe OpenStreetMap, quel que soit son numéro, ou une départementale
+ * d'importance 1 à 3. Une importance inconnue compte comme un fort trafic, par prudence.
  */
-export const estDepartementaleAFortTrafic = (attributs: AttributsDuTroncon | undefined): boolean => {
+export const estRouteAFortTrafic = (attributs: AttributsDuTroncon | undefined): boolean => {
+  if (attributs?.grandAxe) return true
   if (!estDepartementale(attributs?.cpx_numero)) return false
   const importance = Number(attributs?.importance)
   return !(importance >= IMPORTANCE_ROUTE_CALME)
@@ -130,7 +136,7 @@ export function regrouperEnEtapes(troncons: TronconRecu[]): Etape[] {
   for (const troncon of troncons) {
     const codeCommune = troncon.attributes?.insee_commune_gauche?.trim() || null
     const route = nomDeLaRoute(troncon.attributes)
-    const fortTrafic = estDepartementaleAFortTrafic(troncon.attributes)
+    const fortTrafic = estRouteAFortTrafic(troncon.attributes)
     const etapePrecedente = etapes[etapes.length - 1]
     if (etapePrecedente && etapePrecedente.codeCommune === codeCommune && etapePrecedente.route === route) {
       etapePrecedente.distanceMetres += troncon.distance
@@ -202,7 +208,7 @@ export function itineraireDepuisTroncons(
   return {
     distanceMetres,
     departementaleFortTraficMetres: tronconsRecus
-      .filter((tronconRecu) => estDepartementaleAFortTrafic(tronconRecu.attributes))
+      .filter((tronconRecu) => estRouteAFortTrafic(tronconRecu.attributes))
       .reduce((total, tronconRecu) => total + tronconRecu.distance, 0),
     troncons: tronconsRecus.map((tronconRecu) => ({
       distanceMetres: tronconRecu.distance,

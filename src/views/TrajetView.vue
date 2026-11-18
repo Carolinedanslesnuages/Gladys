@@ -77,8 +77,8 @@ const annonceItineraire = computed(() => {
   const { itineraire } = resultat.value
   const departementale =
     itineraire.departementaleFortTraficMetres > 0
-      ? `dont ${enKilometres(itineraire.departementaleFortTraficMetres)} sur départementale à fort trafic`
-      : 'sans départementale à fort trafic'
+      ? `dont ${enKilometres(itineraire.departementaleFortTraficMetres)} sur route à fort trafic`
+      : 'sans route à fort trafic'
   return `Itinéraire calculé : ${enKilometres(itineraire.distanceMetres)}, sans autoroute ni voie rapide, ${departementale}.`
 })
 
@@ -278,7 +278,7 @@ async function effacer(confirme: boolean): Promise<void> {
     <p>Il ne passe jamais par une autoroute ni une voie rapide.</p>
     <DsfrRadioButtonSet
       name="seuil-detour"
-      legend="Détour accepté pour éviter les départementales à fort trafic"
+      legend="Détour accepté pour éviter les routes à fort trafic"
       hint="Les départementales calmes restent permises. Votre choix reste gardé sur ce téléphone."
       :model-value="seuilDetour"
       :options="optionsDeDetour"
@@ -313,23 +313,23 @@ async function effacer(confirme: boolean): Promise<void> {
           type="warning"
           small
           class="fr-mb-2w"
-          description="Aucun itinéraire sans départementale à fort trafic n’existe pour ce trajet. Voici le trajet le plus sûr, avec le moins de fort trafic possible."
+          description="Aucun itinéraire sans route à fort trafic n’existe pour ce trajet. Voici le trajet le plus sûr, avec le moins de fort trafic possible."
         />
         <DsfrAlert
           v-else-if="resultat.detourTropLong"
           type="info"
           small
           class="fr-mb-2w"
-          :description="`Un trajet sans départementale à fort trafic existe, mais son détour dépasse ${seuilDetour} %. Voici le trajet le plus court sans autoroute.`"
+          :description="`Un trajet sans route à fort trafic existe, mais son détour dépasse ${seuilDetour} %. Voici le trajet le plus court sans autoroute.`"
         />
         <dl class="fr-mb-0">
           <dt>Distance totale</dt>
           <dd>{{ enKilometres(resultat.itineraire.distanceMetres) }}</dd>
-          <dt>Sur départementale à fort trafic</dt>
+          <dt>Sur route à fort trafic</dt>
           <dd v-if="resultat.itineraire.departementaleFortTraficMetres > 0">
             {{ enKilometres(resultat.itineraire.departementaleFortTraficMetres) }}
           </dd>
-          <dd v-else>Aucun kilomètre : trajet sans départementale à fort trafic</dd>
+          <dd v-else>Aucun kilomètre : trajet sans route à fort trafic</dd>
           <dt>Calculé avec</dt>
           <dd v-if="calculateurDuResultat === 'openstreetmap'">OpenStreetMap (© les contributeurs d’OpenStreetMap)</dd>
           <dd v-else>IGN</dd>
@@ -404,7 +404,7 @@ async function effacer(confirme: boolean): Promise<void> {
           {{ enKilometres(etape.distanceMetres) }}
           <DsfrBadge
             v-if="etape.fortTrafic"
-            label="Départementale à fort trafic"
+            :label="etape.departementale ? 'Départementale à fort trafic' : 'Grand axe à fort trafic'"
             type="warning"
             small
             class="fr-ml-1w"

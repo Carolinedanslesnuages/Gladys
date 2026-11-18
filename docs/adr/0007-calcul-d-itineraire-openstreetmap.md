@@ -35,6 +35,15 @@ OpenStreetMap (en essai) ». L'IGN reste le choix par défaut. Le choix est gard
   BD TOPO (route principale ou secondaire : 2-3, fort trafic ; tertiaire et moins : calme).
   Départementale : un nom « D… » parmi ceux de la route, ou « M… » pour les anciennes
   départementales cédées à une métropole (la D974 devient M974 dans Dijon), IGN compris.
+- **Grands axes sans numéro « D… »** (signalé une seconde fois par le PO) : avec OpenStreetMap,
+  toute route principale ou secondaire compte comme fort trafic, même une nationale « N… » ou
+  une grande route sans numéro (`grandAxe`) ; l'étape porte la mention « Grand axe à fort
+  trafic ». L'IGN ne change pas : son calculateur ne sait éviter que les départementales.
+- **Contournement** : si le meilleur chemin garde du fort trafic, on redemande un trajet en
+  interdisant un carré de 30 m au milieu de chacun de ses tronçons à fort trafic (au plus 60,
+  les plus longs ; `exclude_polygons`), loin des carrefours pour pouvoir encore les traverser.
+  Il est retenu s'il est moins chargé dans la limite du détour ; s'il échoue, on garde les
+  chemins déjà connus. Une demande de plus au calculateur, seulement dans ce cas.
 - Un trajet qui emprunterait une autoroute est écarté ; si le plus court en emprunte une, le
   calcul échoue avec un message.
 - **Villages** : la commune de chaque tronçon vient de la Base Adresse Nationale (IGN,

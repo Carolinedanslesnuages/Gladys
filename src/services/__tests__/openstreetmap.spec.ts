@@ -6,10 +6,12 @@ import {
   decoderTrace,
   enTronconRecu,
   leMoinsCharge,
+  milieuDuTroncon,
+  zonesInterdites,
   type TrajetPossible,
 } from '../openstreetmap'
 import { ErreurReseau, type Lieu } from '../adresses'
-import { IMPORTANCE_ROUTE_CALME, estDepartementale } from '../itineraire'
+import { IMPORTANCE_ROUTE_CALME, estDepartementale, estRouteAFortTrafic, regrouperEnEtapes } from '../itineraire'
 import { encoderTrace, simulerOpenStreetMap, type TrajetsSimules } from '@/__tests__/openstreetmap-simule'
 
 const dijon: Lieu = { libelle: 'Dijon', latitude: 47.322, longitude: 5.0415 }
@@ -53,8 +55,69 @@ describe('Calcul d’itinéraire avec OpenStreetMap (demande #18)', () => {
     expect(IMPORTANCE_PAR_CLASSE_DE_ROUTE.tertiary).toBe(IMPORTANCE_ROUTE_CALME)
     expect(enTronconRecu({ length: 1.5, road_class: 'secondary', names: ['Rue de Beaune', 'D 35'], speed: 50 })).toEqual({
       distance: 1500,
-      attributes: { cpx_numero: 'D 35', nom_1_gauche: 'Rue de Beaune', vitesse_moyenne_vl: 50, importance: 3 },
+      attributes: { cpx_numero: 'D 35', nom_1_gauche: 'Rue de Beaune', vitesse_moyenne_vl: 50, importance: 3, grandAxe: true },
     })
+  })
+
+  it('compte un grand axe sans numéro « D… » (nationale, grande route sans numéro) comme fort trafic', () => {
+    const nationale = enTronconRecu({ length: 2, road_class: 'primary', names: ['N 74'] })
+    const grandeRouteSansNumero = enTronconRecu({ length: 2, road_class: 'secondary', names: ['Route de Seurre'] })
+    const petiteRoute = enTronconRecu({ length: 2, road_class: 'tertiary', names: ['Route de Barges'] })
+    expect(estRouteAFortTrafic(nationale.attributes)).toBe(true)
+    expect(estRouteAFortTrafic(grandeRouteSansNumero.attributes)).toBe(true)
+    expect(estRouteAFortTrafic(petiteRoute.attributes)).toBe(false)
+    expect(regrouperEnEtapes([grandeRouteSansNumero])[0]).toMatchObject({ departementale: false, fortTrafic: true })
+  })
+
+  it('cherche un contournement quand le meilleur chemin garde un grand axe, et le retient s’il est plus calme', async () => {
+    const parLeGrandAxe = [
+      { kilometres: 6, classe: 'secondary', noms: ['Route de Seurre'], codeCommune: '21231' },
+      { kilometres: 5, classe: 'tertiary', noms: ['D 20'], codeCommune: '21054' },
+    ]
+    const parLesVillages = [
+      { kilometres: 7, classe: 'tertiary', noms: ['D 109'], codeCommune: '21049' },
+      { kilometres: 5, classe: 'tertiary', noms: ['D 20'], codeCommune: '21054' },
+    ]
+    fetchSimule.mockImplementation(
+      simulerOpenStreetMap({ ...trajetsDijonBeaune, fuyantLesGrandsAxes: parLeGrandAxe, contournement: parLesVillages }, nomsDesCommunes),
+    )
+    const resultat = await calculerItineraireOpenStreetMap(dijon, beaune, 30)
+    const demandeDeContournement = fetchSimule.mock.calls
+      .filter(([adresse]) => adresse.endsWith('/route'))
+      .map(([, options]) => JSON.parse(String(options?.body)))
+      .find((corps) => corps.exclude_polygons)
+    expect(demandeDeContournement.exclude_polygons).toHaveLength(1)
+    expect(demandeDeContournement.costing).toBe('motor_scooter')
+    expect(resultat.itineraire.departementaleFortTraficMetres).toBe(0)
+    expect(resultat.itineraire.etapes.map((etape) => etape.route)).toEqual(['D 109', 'D 20'])
+  })
+
+  it('garde le meilleur chemin connu si le contournement échoue', async () => {
+    const parLeGrandAxe = [
+      { kilometres: 3, classe: 'secondary', noms: ['Route de Seurre'], codeCommune: '21231' },
+      { kilometres: 8, classe: 'tertiary', noms: ['D 20'], codeCommune: '21054' },
+    ]
+    fetchSimule.mockImplementation(simulerOpenStreetMap({ ...trajetsDijonBeaune, fuyantLesGrandsAxes: parLeGrandAxe }, nomsDesCommunes))
+    const resultat = await calculerItineraireOpenStreetMap(dijon, beaune, 30)
+    expect(fetchSimule.mock.calls.some(([, options]) => String(options?.body).includes('exclude_polygons'))).toBe(true)
+    expect(resultat.itineraire.departementaleFortTraficMetres).toBe(3000)
+    expect(resultat.itineraire.etapes[0]).toMatchObject({ route: 'Route de Seurre', fortTrafic: true })
+  })
+
+  it('interdit un petit carré au milieu de chaque tronçon à fort trafic, les plus longs d’abord, en nombre limité', () => {
+    const points = [
+      { latitude: 47, longitude: 5 },
+      { latitude: 47.01, longitude: 5 },
+      { latitude: 47.02, longitude: 5.01 },
+    ]
+    expect(milieuDuTroncon({ length: 1, begin_shape_index: 0, end_shape_index: 1 }, points)?.latitude).toBeCloseTo(47.005, 9)
+    expect(milieuDuTroncon({ length: 2, begin_shape_index: 0, end_shape_index: 2 }, points)).toEqual(points[1])
+    expect(milieuDuTroncon({ length: 2 }, points)).toBeNull()
+    const [carre] = zonesInterdites([{ latitude: 47, longitude: 5 }])
+    expect(carre).toHaveLength(5)
+    expect(carre![0]).toEqual(carre![4])
+    expect(carre![2]![1]! - carre![0]![1]!).toBeCloseTo(30 / 111320, 8)
+    expect(zonesInterdites(Array.from({ length: 100 }, () => ({ latitude: 47, longitude: 5 })))).toHaveLength(60)
   })
 
   it('calcule avec le profil cyclomoteur (45 km/h, sans autoroute) et évite la départementale à fort trafic', async () => {
@@ -116,6 +179,7 @@ describe('Calcul d’itinéraire avec OpenStreetMap (demande #18)', () => {
       itineraire: { distanceMetres, departementaleFortTraficMetres, troncons: [], etapes: [], trace: [] },
       tronconsRecus: [],
       debutsDesTroncons: [],
+      milieuxDesTronconsAFortTrafic: [],
     })
     const charge = chemin(11000, 3000)
     const calmeMaisLoin = chemin(20000, 0)

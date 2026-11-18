@@ -19,6 +19,8 @@ export interface TrajetsSimules {
   fuyantLesGrandsAxes: TronconSimule[]
   /** Les autres chemins proposés avec celui qui fuit les grands axes. */
   autresChemins?: TronconSimule[][]
+  /** Le chemin proposé quand on interdit les routes à fort trafic (zones interdites). */
+  contournement?: TronconSimule[]
 }
 
 const encoderNombre = (valeur: number): string => {
@@ -54,7 +56,8 @@ const pointsDuTrajet = (troncons: TronconSimule[], rangDuTrajet: number): PointD
   [...troncons, null].map((_troncon, rang) => ({ latitude: 45 + rangDuTrajet * 0.1 + rang * 0.001, longitude: 4.8 }))
 
 export function simulerOpenStreetMap(trajets: TrajetsSimules, nomsDesCommunes: Record<string, string>) {
-  const traces = [trajets.plusCourt, trajets.fuyantLesGrandsAxes, ...(trajets.autresChemins ?? [])].map(
+  const autresChemins = trajets.autresChemins ?? []
+  const traces = [trajets.plusCourt, trajets.fuyantLesGrandsAxes, ...autresChemins, trajets.contournement ?? []].map(
     (troncons, rangDuTrajet) => {
       const points = pointsDuTrajet(troncons, rangDuTrajet)
       return { troncons, points, traceCodee: encoderTrace(points) }
@@ -73,7 +76,10 @@ export function simulerOpenStreetMap(trajets: TrajetsSimules, nomsDesCommunes: R
     const corps = typeof options?.body === 'string' ? JSON.parse(options.body) : null
     if (adresse.endsWith('/route')) {
       if (corps.costing_options.motor_scooter.shortest) return json({ trip: trajetSimule(traces[0]!) })
-      const autres = corps.alternates ? traces.slice(2, 2 + corps.alternates) : []
+      if (corps.exclude_polygons) {
+        return trajets.contournement ? json({ trip: trajetSimule(traces[traces.length - 1]!) }) : new Response('{}', { status: 400 })
+      }
+      const autres = corps.alternates ? traces.slice(2, 2 + Math.min(corps.alternates, autresChemins.length)) : []
       return json({ trip: trajetSimule(traces[1]!), alternates: autres.map((trace) => ({ trip: trajetSimule(trace) })) })
     }
     if (adresse.endsWith('/trace_attributes')) {
@@ -86,6 +92,7 @@ export function simulerOpenStreetMap(trajets: TrajetsSimules, nomsDesCommunes: R
           names: troncon.noms,
           speed: 50,
           begin_shape_index: rang,
+          end_shape_index: rang + 1,
         })),
       })
     }

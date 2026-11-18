@@ -7,7 +7,7 @@ import {
   choisirItineraire,
   IMPORTANCE_ROUTE_CALME,
   estDepartementale,
-  estDepartementaleAFortTrafic,
+  estRouteAFortTrafic,
   regrouperEnEtapes,
 } from '../itineraire'
 import { ErreurReseau, type Lieu } from '../adresses'
@@ -82,16 +82,16 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
     })
 
     it('une D930 très fréquentée compte ; une départementale calme ne compte pas', () => {
-      expect(estDepartementaleAFortTrafic({ cpx_numero: 'D930', importance: '2' })).toBe(true)
-      expect(estDepartementaleAFortTrafic({ cpx_numero: 'D12', importance: '3' })).toBe(true)
-      expect(estDepartementaleAFortTrafic({ cpx_numero: 'D75', importance: '4' })).toBe(false)
-      expect(estDepartementaleAFortTrafic({ cpx_numero: 'D75', importance: 5 })).toBe(false)
-      expect(estDepartementaleAFortTrafic({ cpx_numero: 'N7', importance: '1' })).toBe(false)
+      expect(estRouteAFortTrafic({ cpx_numero: 'D930', importance: '2' })).toBe(true)
+      expect(estRouteAFortTrafic({ cpx_numero: 'D12', importance: '3' })).toBe(true)
+      expect(estRouteAFortTrafic({ cpx_numero: 'D75', importance: '4' })).toBe(false)
+      expect(estRouteAFortTrafic({ cpx_numero: 'D75', importance: 5 })).toBe(false)
+      expect(estRouteAFortTrafic({ cpx_numero: 'N7', importance: '1' })).toBe(false)
     })
 
     it('par prudence, une départementale d’importance inconnue compte comme fort trafic', () => {
-      expect(estDepartementaleAFortTrafic({ cpx_numero: 'D12' })).toBe(true)
-      expect(estDepartementaleAFortTrafic({ cpx_numero: 'D12', importance: '' })).toBe(true)
+      expect(estRouteAFortTrafic({ cpx_numero: 'D12' })).toBe(true)
+      expect(estRouteAFortTrafic({ cpx_numero: 'D12', importance: '' })).toBe(true)
     })
 
     it('ne compte que les kilomètres de départementale à fort trafic', async () => {
