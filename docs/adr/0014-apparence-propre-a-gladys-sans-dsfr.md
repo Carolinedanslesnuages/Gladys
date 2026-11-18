@@ -17,7 +17,8 @@ l'application (polices et styles à garder hors connexion).
 - **Composants recréés simplement** (`src/components/interface/`) : bouton, champ de saisie, alerte, pastille,
   choix unique (boutons radio), fenêtre (`<dialog>` natif), icônes. Chacun est accessible (RGAA) :
   - cibles d'au moins 44 px de haut ;
-  - **intitulé visible pour chaque bouton** (plus de bouton à icône seule) ; le nom complet reste dans `aria-label` ;
+  - **intitulé visible pour chaque bouton**, sauf les commandes de la carte : sur téléphone, elles restent
+    compactes (icône seule, 44 px) ; leur nom complet est lu par les lecteurs d'écran et affiché au survol ;
   - étiquette visible reliée au champ, aide et erreur reliées par `aria-describedby`, erreur annoncée ;
   - information jamais par la couleur seule (icône et texte en plus).
 - **Contrastes** : au moins 4,5:1 pour le texte ; les couleurs sont dans `src/styles/gladys.css`

@@ -514,12 +514,13 @@ const nomDeLaCarte = () =>
           />
         </div>
       </div>
-      <!-- Chaque bouton a un intitulé court visible ; son nom complet (aria-label) le contient. -->
+      <!-- Boutons compacts (icône seule) : leur nom complet est lu par les lecteurs d'écran et affiché au survol. -->
       <div class="commandes-carte">
         <Bouton
           v-if="pleinEcran || (suiviActif && !carteCentreeSurLaPersonne)"
           type="button"
           icone="recentrer"
+          icone-seule
           label="Recentrer"
           aria-label="Me recentrer sur ma position"
           @click="recentrerSurLaPersonne"
@@ -528,6 +529,7 @@ const nomDeLaCarte = () =>
           type="button"
           variante="secondaire"
           :icone="suiviActif ? 'arreter' : 'position'"
+          icone-seule
           :label="suiviActif ? 'Arrêter' : 'Suivre'"
           :aria-label="
             suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'
@@ -539,6 +541,7 @@ const nomDeLaCarte = () =>
           type="button"
           variante="secondaire"
           icone="boussole"
+          icone-seule
           :label="sensDeLaMarche ? 'Nord en haut' : 'Tourner'"
           :aria-label="
             sensDeLaMarche
@@ -551,6 +554,7 @@ const nomDeLaCarte = () =>
           type="button"
           variante="secondaire"
           icone="zoomPlus"
+          icone-seule
           label="Zoomer"
           aria-label="Zoomer sur la carte"
           @click="zoomer"
@@ -559,6 +563,7 @@ const nomDeLaCarte = () =>
           type="button"
           variante="secondaire"
           icone="zoomMoins"
+          icone-seule
           label="Dézoomer"
           aria-label="Dézoomer la carte"
           @click="dezoomer"
@@ -569,6 +574,7 @@ const nomDeLaCarte = () =>
           type="button"
           variante="secondaire"
           icone="quitterPleinEcran"
+          icone-seule
           label="Quitter"
           aria-label="Quitter le plein écran"
           @click="quitterLePleinEcran"
@@ -579,6 +585,7 @@ const nomDeLaCarte = () =>
           type="button"
           variante="secondaire"
           icone="pleinEcran"
+          icone-seule
           label="Plein écran"
           aria-label="Afficher la carte en plein écran"
           @click="entrerEnPleinEcran"

@@ -646,6 +646,7 @@ async function effacer(confirme: boolean): Promise<void> {
               variante="discret"
               icone="flecheBas"
               class="bouton-barre"
+              icone-seule
               label="Détail"
               aria-label="Voir le détail du trajet"
               @click="voirLeDetailDuTrajet"

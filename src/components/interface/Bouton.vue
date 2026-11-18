@@ -10,15 +10,22 @@ withDefaults(
     label: string
     icone?: NomIcone
     variante?: 'principal' | 'secondaire' | 'discret'
+    /** Bouton compact (ex. : commandes de la carte) : l'intitulé n'est plus affiché, mais reste lu et visible au survol. */
+    iconeSeule?: boolean
   }>(),
-  { icone: undefined, variante: 'principal' },
+  { icone: undefined, variante: 'principal', iconeSeule: false },
 )
 </script>
 
 <template>
-  <button class="bouton" :class="`bouton--${variante}`" type="button">
+  <button
+    class="bouton"
+    :class="[`bouton--${variante}`, { 'bouton--icone-seule': iconeSeule && icone }]"
+    type="button"
+    :title="iconeSeule && icone ? label : undefined"
+  >
     <Icone v-if="icone" :nom="icone" />
-    <span>{{ label }}</span>
+    <span :class="{ 'visuellement-cache': iconeSeule && icone }">{{ label }}</span>
   </button>
 </template>
 
@@ -61,6 +68,9 @@ withDefaults(
 }
 .bouton--discret:hover:not(:disabled) {
   background: var(--vert-route-pale);
+}
+.bouton--icone-seule {
+  padding: 0.5rem;
 }
 .bouton:disabled {
   cursor: not-allowed;

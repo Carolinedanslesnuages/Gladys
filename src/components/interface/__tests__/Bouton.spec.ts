@@ -14,6 +14,13 @@ describe('Composants maison de GLADYS', () => {
     expect(bouton.find('svg').attributes('aria-hidden')).toBe('true')
   })
 
+  it('un bouton compact (icône seule) garde son nom pour les lecteurs d’écran et le survol', () => {
+    const bouton = mount(Bouton, { props: { label: 'Zoomer', icone: 'zoomPlus', iconeSeule: true } })
+    expect(bouton.attributes('title')).toBe('Zoomer')
+    expect(bouton.find('span').classes()).toContain('visuellement-cache')
+    expect(bouton.text()).toBe('Zoomer')
+  })
+
   it('un champ relie son étiquette, son aide et son erreur au champ', async () => {
     const champ = mount(ChampSaisie, {
       props: { id: 'nom', label: 'Nom', indication: 'Une aide', messageErreur: 'Obligatoire' },
