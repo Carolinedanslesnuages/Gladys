@@ -72,10 +72,11 @@ const repereDeLaPersonneIcone = () =>
     iconSize: [0, 0],
     html:
       '<span class="repere-vous repere-vous--sans-direction">' +
-      '<svg class="vehicule-vous" viewBox="0 0 32 32" width="40" height="40" aria-hidden="true" focusable="false">' +
-      '<rect class="carrosserie-vous" x="8" y="3" width="16" height="26" rx="6" />' +
-      '<path class="vitre-vous" d="M11 10 Q16 7.5 21 10 L20 14 L12 14 Z" />' +
-      '<path class="vitre-vous" d="M12 22 L20 22 L21 25 Q16 26.5 11 25 Z" /></svg>' +
+      // Une voiture sans permis : courte, presque aussi large que longue, en 24 px.
+      '<svg class="vehicule-vous" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true" focusable="false">' +
+      '<rect class="carrosserie-vous" x="7" y="5" width="18" height="22" rx="7" />' +
+      '<path class="vitre-vous" d="M10.5 12 Q16 8.5 21.5 12 L20.5 16 L11.5 16 Z" />' +
+      '<path class="vitre-vous" d="M12 22 L20 22 L20.5 24 Q16 25.5 11.5 24 Z" /></svg>' +
       '<span class="etiquette-repere">Vous</span></span>',
   })
 
@@ -624,7 +625,7 @@ const nomDeLaCarte = () =>
   font-size: 0.875rem;
   transform: translate(-50%, -50%);
 }
-/* Repère de la personne : le véhicule (40 px) est centré sur sa position, « Vous » écrit dessous. */
+/* Repère de la personne : le véhicule (24 px) est centré sur sa position, « Vous » écrit dessous. */
 .carte-trajet :deep(.repere-vous) {
   position: absolute;
   left: 0;
@@ -632,7 +633,7 @@ const nomDeLaCarte = () =>
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: translate(-50%, -20px);
+  transform: translate(-50%, -12px);
 }
 .carte-trajet :deep(.repere-vous .etiquette-repere) {
   transform: none;

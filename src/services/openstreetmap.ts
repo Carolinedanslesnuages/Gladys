@@ -178,13 +178,27 @@ async function demander<Reponse>(action: string, corps: object): Promise<Reponse
   return (await reponse.json()) as Reponse
 }
 
+/**
+ * Jamais chez le voisin : le départ et l'arrivée s'accrochent à une vraie rue (pas à une allée,
+ * une cour ou un parking, classe « service »), et le trajet fuit voies privées, allées et chemins.
+ */
+export const FILTRE_RUE_LA_PLUS_PROCHE = { min_road_class: 'residential' }
+export const EVITEMENT_VOIES_PRIVEES = {
+  private_access_penalty: 3600,
+  destination_only_penalty: 600,
+  service_penalty: 300,
+  service_factor: 5,
+  use_tracks: 0,
+  use_living_streets: 0.1,
+}
+
 const demandeDeTrajet = (depart: Lieu, arrivee: Lieu, options: object, autresChemins = 0) => ({
   locations: [
-    { lat: depart.latitude, lon: depart.longitude },
-    { lat: arrivee.latitude, lon: arrivee.longitude },
+    { lat: depart.latitude, lon: depart.longitude, search_filter: FILTRE_RUE_LA_PLUS_PROCHE },
+    { lat: arrivee.latitude, lon: arrivee.longitude, search_filter: FILTRE_RUE_LA_PLUS_PROCHE },
   ],
   costing: PROFIL_VSP,
-  costing_options: { [PROFIL_VSP]: options },
+  costing_options: { [PROFIL_VSP]: { ...EVITEMENT_VOIES_PRIVEES, ...options } },
   units: 'kilometers',
   directions_type: 'none',
   ...(autresChemins > 0 ? { alternates: autresChemins } : {}),

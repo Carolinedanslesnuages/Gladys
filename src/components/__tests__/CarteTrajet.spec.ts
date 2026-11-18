@@ -277,6 +277,8 @@ describe('Carte du trajet', () => {
       await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
       await recevoirPosition(ecran, 45.6, 4.95)
       expect(repereVous().querySelector('svg.vehicule-vous')).not.toBeNull()
+      // Une toute petite voiture : une voiture sans permis.
+      expect(repereVous().querySelector('svg.vehicule-vous')!.getAttribute('width')).toBe('24')
       expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(true)
       expect(repereVous().textContent).toBe('Vous')
       // Sans direction donnée par le GPS : celle du déplacement (ici, plein sud).
