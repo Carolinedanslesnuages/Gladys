@@ -563,6 +563,49 @@ describe('Écran « Préparer mon trajet »', () => {
       ecran.unmount()
     })
 
+    it('Demande #30 : rien ne s’affiche sous la carte sans le demander ; un bouton l’affiche puis le masque', async () => {
+      const ecran = monter()
+      const bouton = () => ecran.find('#bouton-afficher-detail')
+      expect(ecran.find('#mes-trajets-recents').isVisible()).toBe(false)
+      expect(ecran.find('#detail-du-trajet').isVisible()).toBe(false)
+      expect(bouton().attributes('aria-expanded')).toBe('false')
+      expect(bouton().text()).toBe('Afficher le détail et mes trajets récents')
+      await bouton().trigger('click')
+      expect(ecran.find('#mes-trajets-recents').isVisible()).toBe(true)
+      expect(bouton().attributes('aria-expanded')).toBe('true')
+      expect(bouton().text()).toBe('Masquer le détail et mes trajets récents')
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      await bouton().trigger('click')
+      expect(ecran.find('#mes-trajets-recents').isVisible()).toBe(false)
+      ecran.unmount()
+    })
+
+    it('Demande #30 : « Voir le détail du trajet » sur la carte affiche le détail masqué', async () => {
+      simulerLocalStorage({
+        'gladys:accord-historique': JSON.stringify('accepte'),
+        'gladys:trajets-recents': JSON.stringify([
+          {
+            depart: { libelle: 'Lyon', latitude: 45.75, longitude: 4.85 },
+            arrivee: { libelle: 'Vienne', latitude: 45.52, longitude: 4.87 },
+            valideLe: '2026-11-16T10:00:00Z',
+          },
+        ]),
+      })
+      fetchSimule
+        .mockResolvedValueOnce(reponseAvecVitesses())
+        .mockResolvedValueOnce(reponseAvecVitesses())
+      const ecran = monter()
+      await boutonNomme(ecran, 'Reprendre le trajet de Lyon à Vienne').trigger('click')
+      await flushPromises()
+      expect(ecran.find('#detail-du-trajet').isVisible()).toBe(false)
+      await boutonNomme(ecran, 'Voir le détail du trajet').trigger('click')
+      await flushPromises()
+      expect(ecran.find('#detail-du-trajet').isVisible()).toBe(true)
+      expect(document.activeElement?.id).toBe('titre-itineraire')
+      ecran.unmount()
+    })
+
     it('Demande #30 : une fois l’itinéraire calculé, la barre se replie ; la toucher la rouvre', async () => {
       simulerLocalStorage({
         'gladys:accord-historique': JSON.stringify('accepte'),
