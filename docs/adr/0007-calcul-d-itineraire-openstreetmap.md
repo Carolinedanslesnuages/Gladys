@@ -26,9 +26,15 @@ OpenStreetMap (en essai) ». L'IGN reste le choix par défaut. Le choix est gard
   le plus court (`shortest: true`) et celui qui fuit les routes principales (`use_primary: 0`).
   Chacun est décrit route par route (`trace_attributes`), puis comparé selon le seuil de détour,
   comme avec l'IGN (`choisirItineraire`).
+- **Autres chemins** (ajout du 2026-11-18, retour du PO : « il me fait prendre un grand axe
+  orangé-jaune alors qu'il existe un autre chemin ») : `use_primary` ne fuit que les routes
+  principales (orange sur la carte), pas les secondaires (jaune). La demande qui fuit les grands
+  axes réclame donc deux autres chemins (`alternates: 2`), décrits l'un après l'autre ; on garde
+  le moins chargé en fort trafic qui tient dans le détour accepté (`leMoinsCharge`).
 - **Même règle de trafic que l'ADR 0003** : la classe OpenStreetMap est ramenée à l'importance
   BD TOPO (route principale ou secondaire : 2-3, fort trafic ; tertiaire et moins : calme).
-  Départementale : un nom « D… » parmi ceux de la route.
+  Départementale : un nom « D… » parmi ceux de la route, ou « M… » pour les anciennes
+  départementales cédées à une métropole (la D974 devient M974 dans Dijon), IGN compris.
 - Un trajet qui emprunterait une autoroute est écarté ; si le plus court en emprunte une, le
   calcul échoue avec un message.
 - **Villages** : la commune de chaque tronçon vient de la Base Adresse Nationale (IGN,
@@ -46,8 +52,10 @@ OpenStreetMap (en essai) ». L'IGN reste le choix par défaut. Le choix est gard
   services publics de l'IGN et de l'État. Rien d'autre, aucun compte.
 - **Négatives** : service gratuit, sans garantie de disponibilité, qui ralentit ou refuse les
   connexions en cas d'usage intensif (constaté pendant les essais) ; trajets de 200 km au plus ;
-  quatre demandes au calculateur par trajet, plus lent que l'IGN.
+  jusqu'à six demandes au calculateur par trajet, plus lent que l'IGN.
 - **Constaté sur un vrai trajet** (Dijon → Beaune) : 49,9 km dont 3,4 km à fort trafic, contre
-  39,3 km dont 29 km pour le plus court ; détour de 27 %, accepté à 30 %.
+  39,3 km dont 29 km pour le plus court ; détour de 27 %, accepté à 30 %. Avec les autres
+  chemins et les routes « M… » comptées : le premier chemin fuyant (46,6 km) garde environ 14 km
+  de routes secondaires chargées, un autre (49,8 km) environ 9 km ; c'est lui qui est retenu.
 - **À décider après l'essai** : garder les deux, passer à OpenStreetMap seul, ou héberger notre
   propre calculateur si l'usage grandit.

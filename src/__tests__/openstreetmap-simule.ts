@@ -17,6 +17,8 @@ export interface TronconSimule {
 export interface TrajetsSimules {
   plusCourt: TronconSimule[]
   fuyantLesGrandsAxes: TronconSimule[]
+  /** Les autres chemins proposés avec celui qui fuit les grands axes. */
+  autresChemins?: TronconSimule[][]
 }
 
 const encoderNombre = (valeur: number): string => {
@@ -52,9 +54,15 @@ const pointsDuTrajet = (troncons: TronconSimule[], rangDuTrajet: number): PointD
   [...troncons, null].map((_troncon, rang) => ({ latitude: 45 + rangDuTrajet * 0.1 + rang * 0.001, longitude: 4.8 }))
 
 export function simulerOpenStreetMap(trajets: TrajetsSimules, nomsDesCommunes: Record<string, string>) {
-  const traces = [trajets.plusCourt, trajets.fuyantLesGrandsAxes].map((troncons, rangDuTrajet) => {
-    const points = pointsDuTrajet(troncons, rangDuTrajet)
-    return { troncons, points, traceCodee: encoderTrace(points) }
+  const traces = [trajets.plusCourt, trajets.fuyantLesGrandsAxes, ...(trajets.autresChemins ?? [])].map(
+    (troncons, rangDuTrajet) => {
+      const points = pointsDuTrajet(troncons, rangDuTrajet)
+      return { troncons, points, traceCodee: encoderTrace(points) }
+    },
+  )
+  const trajetSimule = (trace: (typeof traces)[number]) => ({
+    summary: { length: trace.troncons.reduce((total, troncon) => total + troncon.kilometres, 0) },
+    legs: [{ shape: trace.traceCodee }],
   })
   const tronconParPoint = new Map(
     traces.flatMap((trace) => trace.troncons.map((troncon, rang) => [cleDuPoint(trace.points[rang]!.latitude), troncon] as const)),
@@ -64,9 +72,9 @@ export function simulerOpenStreetMap(trajets: TrajetsSimules, nomsDesCommunes: R
   return async (adresse: string, options?: RequestInit): Promise<Response> => {
     const corps = typeof options?.body === 'string' ? JSON.parse(options.body) : null
     if (adresse.endsWith('/route')) {
-      const trace = corps.costing_options.motor_scooter.shortest ? traces[0]! : traces[1]!
-      const kilometres = trace.troncons.reduce((total, troncon) => total + troncon.kilometres, 0)
-      return json({ trip: { summary: { length: kilometres }, legs: [{ shape: trace.traceCodee }] } })
+      if (corps.costing_options.motor_scooter.shortest) return json({ trip: trajetSimule(traces[0]!) })
+      const autres = corps.alternates ? traces.slice(2, 2 + corps.alternates) : []
+      return json({ trip: trajetSimule(traces[1]!), alternates: autres.map((trace) => ({ trip: trajetSimule(trace) })) })
     }
     if (adresse.endsWith('/trace_attributes')) {
       const trace = traces.find((traceConnue) => traceConnue.traceCodee === corps.encoded_polyline)!

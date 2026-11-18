@@ -5,9 +5,11 @@ import {
   completerLesCodes,
   decoderTrace,
   enTronconRecu,
+  leMoinsCharge,
+  type TrajetPossible,
 } from '../openstreetmap'
 import { ErreurReseau, type Lieu } from '../adresses'
-import { IMPORTANCE_ROUTE_CALME } from '../itineraire'
+import { IMPORTANCE_ROUTE_CALME, estDepartementale } from '../itineraire'
 import { encoderTrace, simulerOpenStreetMap, type TrajetsSimules } from '@/__tests__/openstreetmap-simule'
 
 const dijon: Lieu = { libelle: 'Dijon', latitude: 47.322, longitude: 5.0415 }
@@ -84,6 +86,51 @@ describe('Calcul d’itinéraire avec OpenStreetMap (demande #18)', () => {
     const resultat = await calculerItineraireOpenStreetMap(dijon, beaune, 10)
     expect(resultat.detourTropLong).toBe(true)
     expect(resultat.itineraire.etapes[0]).toMatchObject({ commune: 'Dijon', route: 'D 974', fortTrafic: true })
+  })
+
+  it('demande d’autres chemins et garde le moins chargé quand le premier prend une route secondaire', async () => {
+    const parLaSecondaire = [
+      { kilometres: 6, classe: 'secondary', noms: ['D 31'], codeCommune: '21231' },
+      { kilometres: 5, classe: 'tertiary', noms: ['D 20'], codeCommune: '21054' },
+    ]
+    const parLesVillages = [
+      { kilometres: 7, classe: 'tertiary', noms: ['D 109'], codeCommune: '21049' },
+      { kilometres: 5, classe: 'tertiary', noms: ['D 20'], codeCommune: '21054' },
+    ]
+    fetchSimule.mockImplementation(
+      simulerOpenStreetMap({ ...trajetsDijonBeaune, fuyantLesGrandsAxes: parLaSecondaire, autresChemins: [parLesVillages] }, nomsDesCommunes),
+    )
+    const resultat = await calculerItineraireOpenStreetMap(dijon, beaune, 30)
+    const demandeFuyante = fetchSimule.mock.calls
+      .filter(([adresse]) => adresse.endsWith('/route'))
+      .map(([, options]) => JSON.parse(String(options?.body)))
+      .find((corps) => corps.costing_options.motor_scooter.use_primary === 0)
+    expect(demandeFuyante.alternates).toBe(2)
+    expect(resultat.itineraire.distanceMetres).toBe(12000)
+    expect(resultat.itineraire.departementaleFortTraficMetres).toBe(0)
+    expect(resultat.itineraire.etapes.map((etape) => etape.route)).toEqual(['D 109', 'D 20'])
+  })
+
+  it('choisit le chemin le moins chargé dans la limite du détour, à égalité le plus court', () => {
+    const chemin = (distanceMetres: number, departementaleFortTraficMetres: number): TrajetPossible => ({
+      itineraire: { distanceMetres, departementaleFortTraficMetres, troncons: [], etapes: [], trace: [] },
+      tronconsRecus: [],
+      debutsDesTroncons: [],
+    })
+    const charge = chemin(11000, 3000)
+    const calmeMaisLoin = chemin(20000, 0)
+    const calme = chemin(12000, 1000)
+    const calmeEtCourt = chemin(11500, 1000)
+    expect(leMoinsCharge([charge, calmeMaisLoin, calme, calmeEtCourt], 13000)).toBe(calmeEtCourt)
+    expect(leMoinsCharge([calmeMaisLoin, chemin(25000, 2000)], 13000)).toBe(calmeMaisLoin)
+    expect(leMoinsCharge([], 13000)).toBeNull()
+  })
+
+  it('compte les routes métropolitaines (anciennes départementales, « M 974 ») comme des départementales', () => {
+    expect(estDepartementale('M 974')).toBe(true)
+    expect(estDepartementale('M974')).toBe(true)
+    expect(estDepartementale('Rue de Mazy')).toBe(false)
+    expect(enTronconRecu({ length: 1, road_class: 'primary', names: ['Avenue Jean Jaurès', 'M 974'] }).attributes?.cpx_numero).toBe('M 974')
   })
 
   it('refuse un trajet qui passerait par une autoroute', async () => {

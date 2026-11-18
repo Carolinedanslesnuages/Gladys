@@ -49,9 +49,22 @@ export interface TronconOpenStreetMap {
   begin_shape_index?: number
 }
 
-interface ReponseTrajet {
-  trip: { summary: { length: number }; legs: { shape: string }[] }
+interface Trajet {
+  summary: { length: number }
+  legs: { shape: string }[]
 }
+
+interface ReponseTrajet {
+  trip: Trajet
+  /** Les autres chemins proposés par le calculateur, quand on les demande. */
+  alternates?: { trip: Trajet }[]
+}
+
+/**
+ * La préférence `use_primary` ne fuit que les routes principales : une route secondaire (jaune sur
+ * la carte) reste permise. On demande donc aussi deux autres chemins, pour garder le moins chargé.
+ */
+const AUTRES_CHEMINS_DEMANDES = 2
 
 interface ReponseAttributs {
   edges?: TronconOpenStreetMap[]
@@ -59,7 +72,7 @@ interface ReponseAttributs {
 }
 
 /** Un trajet possible, avec ses tronçons et le point où chacun commence (pour trouver sa commune). */
-interface TrajetPossible {
+export interface TrajetPossible {
   itineraire: Itineraire
   tronconsRecus: TronconRecu[]
   debutsDesTroncons: (PointDuTrace | null)[]
@@ -120,7 +133,7 @@ async function demander<Reponse>(action: string, corps: object): Promise<Reponse
   return (await reponse.json()) as Reponse
 }
 
-const demandeDeTrajet = (depart: Lieu, arrivee: Lieu, options: object) => ({
+const demandeDeTrajet = (depart: Lieu, arrivee: Lieu, options: object, autresChemins = 0) => ({
   locations: [
     { lat: depart.latitude, lon: depart.longitude },
     { lat: arrivee.latitude, lon: arrivee.longitude },
@@ -129,10 +142,27 @@ const demandeDeTrajet = (depart: Lieu, arrivee: Lieu, options: object) => ({
   costing_options: { [PROFIL_VSP]: options },
   units: 'kilometers',
   directions_type: 'none',
+  ...(autresChemins > 0 ? { alternates: autresChemins } : {}),
 })
 
+/**
+ * Parmi les chemins qui fuient les grands axes, le moins chargé en fort trafic, à égalité le plus
+ * court. Ceux qui tiennent dans le détour accepté passent avant les autres.
+ */
+export function leMoinsCharge(cheminsPossibles: TrajetPossible[], distanceMaximaleMetres: number): TrajetPossible | null {
+  const dansLeDetour = (chemin: TrajetPossible) => chemin.itineraire.distanceMetres <= distanceMaximaleMetres
+  const candidats = cheminsPossibles.some(dansLeDetour) ? cheminsPossibles.filter(dansLeDetour) : cheminsPossibles
+  return candidats.reduce<TrajetPossible | null>((meilleur, chemin) => {
+    if (!meilleur) return chemin
+    const ecart = chemin.itineraire.departementaleFortTraficMetres - meilleur.itineraire.departementaleFortTraficMetres
+    return ecart < 0 || (ecart === 0 && chemin.itineraire.distanceMetres < meilleur.itineraire.distanceMetres)
+      ? chemin
+      : meilleur
+  }, null)
+}
+
 /** Les routes empruntées par un trajet, avec leur classe et leur vitesse. Écarte un trajet par autoroute. */
-async function decrireLeTrajet(trajet: ReponseTrajet['trip']): Promise<TrajetPossible | null> {
+async function decrireLeTrajet(trajet: Trajet): Promise<TrajetPossible | null> {
   // Un départ et une arrivée : le trajet n'a qu'une seule partie.
   const traceCodee = trajet.legs[0]?.shape ?? ''
   const attributs = await demander<ReponseAttributs>('trace_attributes', {
@@ -214,11 +244,20 @@ export async function calculerItineraireOpenStreetMap(
   seuilDetourPourcent: number,
 ): Promise<ResultatItineraire> {
   // Deux demandes à la fois au plus : le service public demande de ne pas le solliciter en rafale.
-  const trajetDecrit = async (options: object) =>
-    decrireLeTrajet((await demander<ReponseTrajet>('route', demandeDeTrajet(depart, arrivee, options))).trip)
-  const [plusCourt, fuyantDecrit] = await Promise.all([trajetDecrit({ shortest: true }), trajetDecrit({ use_primary: 0 })])
+  const [plusCourt, cheminsFuyants] = await Promise.all([
+    demander<ReponseTrajet>('route', demandeDeTrajet(depart, arrivee, { shortest: true })).then((reponse) =>
+      decrireLeTrajet(reponse.trip),
+    ),
+    demander<ReponseTrajet>('route', demandeDeTrajet(depart, arrivee, { use_primary: 0 }, AUTRES_CHEMINS_DEMANDES)),
+  ])
   if (!plusCourt) throw new Error('Le trajet le plus court passe par une autoroute.')
-  const fuyantLesGrandsAxes = fuyantDecrit ?? plusCourt
+  const cheminsDecrits: TrajetPossible[] = []
+  for (const trajet of [cheminsFuyants.trip, ...(cheminsFuyants.alternates ?? []).map((autre) => autre.trip)]) {
+    const cheminDecrit = await decrireLeTrajet(trajet)
+    if (cheminDecrit) cheminsDecrits.push(cheminDecrit)
+  }
+  const distanceMaximale = plusCourt.itineraire.distanceMetres * (1 + seuilDetourPourcent / 100)
+  const fuyantLesGrandsAxes = leMoinsCharge(cheminsDecrits, distanceMaximale) ?? plusCourt
   const resultat = choisirItineraire(plusCourt.itineraire, fuyantLesGrandsAxes.itineraire, seuilDetourPourcent)
   const trajetRetenu = resultat.itineraire === plusCourt.itineraire ? plusCourt : fuyantLesGrandsAxes
   const codes = await completerLesCodes(

@@ -101,8 +101,11 @@ const vitesseDeLaRoute = (vitesseBrute: number | string | undefined): number | n
   return vitesseBrute !== undefined && vitesseBrute !== '' && vitesse > 0 ? vitesse : null
 }
 
-/** Une route départementale porte un numéro « D… » (ou « RD… ») dans les données de l'IGN. */
-export const estDepartementale = (numeroDeRoute: string | undefined) => /^R?D\s?\d/i.test(numeroDeRoute ?? '')
+/**
+ * Une route départementale porte un numéro « D… » (ou « RD… »). Autour de Dijon, Lyon… les
+ * anciennes départementales cédées à la métropole portent un numéro « M… » (la D974 devient M974).
+ */
+export const estDepartementale = (numeroDeRoute: string | undefined) => /^(R?D|M)\s?\d/i.test(numeroDeRoute ?? '')
 
 /**
  * Départementale à fort trafic : importance de 1 à 3. Une importance inconnue compte comme un
