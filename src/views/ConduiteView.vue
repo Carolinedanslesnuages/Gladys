@@ -6,8 +6,10 @@ import Alerte from '@/components/interface/Alerte.vue'
 import Bouton from '@/components/interface/Bouton.vue'
 import CarteTrajet from '@/components/CarteTrajet.vue'
 import Icone, { type NomIcone } from '@/components/interface/Icone.vue'
-import { distanceLisible, type Consigne } from '@/services/consignes'
+import { distanceLisible, distanceRestanteSurLeTrace, type Consigne } from '@/services/consignes'
+import { formaterDuree, formaterHeure, heureDArrivee } from '@/services/duree'
 import { useConduiteStore } from '@/stores/conduite'
+import { useDureeStore } from '@/stores/duree'
 import { useItineraireStore } from '@/stores/itineraire'
 import { useVoixStore } from '@/stores/voix'
 
@@ -45,6 +47,27 @@ window.addEventListener('offline', suivreLeReseau)
 onUnmounted(() => {
   window.removeEventListener('online', suivreLeReseau)
   window.removeEventListener('offline', suivreLeReseau)
+})
+
+/**
+ * Ce qu'il reste : distance sur le tracé, durée (même vitesse que la préparation, au prorata de la
+ * distance restante) et heure d'arrivée. L'heure se remet à jour chaque minute, sans réseau.
+ */
+const { dureeMinutes } = storeToRefs(useDureeStore())
+const maintenant = ref(new Date())
+const minuteurHorloge = window.setInterval(() => (maintenant.value = new Date()), 30_000)
+onUnmounted(() => window.clearInterval(minuteurHorloge))
+const resteDuTrajet = computed(() => {
+  const position = magasinConduite.position
+  const itineraire = resultat.value?.itineraire
+  if (!position || !itineraire || dureeMinutes.value === null || itineraire.distanceMetres <= 0) return null
+  const distanceRestante = Math.min(distanceRestanteSurLeTrace(position, itineraire.trace), itineraire.distanceMetres)
+  const minutesRestantes = dureeMinutes.value * (distanceRestante / itineraire.distanceMetres)
+  return {
+    heure: formaterHeure(heureDArrivee(maintenant.value, minutesRestantes), maintenant.value),
+    duree: formaterDuree(minutesRestantes),
+    distance: distanceLisible(distanceRestante),
+  }
 })
 
 /** Voix active : le son suffit. Le texte reste lu par les lecteurs d'écran mais libère la place de la carte. */
@@ -156,6 +179,12 @@ onUnmounted(() => magasinConduite.arreter())
       />
     </div>
 
+    <p v-if="resteDuTrajet" id="reste-du-trajet" class="reste-du-trajet">
+      <span class="texte-gras">Arrivée à {{ resteDuTrajet.heure }}</span>
+      <span>{{ resteDuTrajet.duree }} restantes</span>
+      <span>{{ resteDuTrajet.distance }}</span>
+    </p>
+
     <Bouton
       id="bouton-arreter-trajet"
       type="button"
@@ -242,6 +271,14 @@ onUnmounted(() => magasinConduite.arreter())
   min-height: 18rem;
   border-radius: 1rem;
   overflow: hidden;
+}
+.reste-du-trajet {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  font-size: 1.25rem;
 }
 .bouton-arret {
   width: 100%;
