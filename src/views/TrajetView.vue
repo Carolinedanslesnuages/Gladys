@@ -75,7 +75,8 @@ function ajusterLaHauteurDeLaCarte(): void {
 }
 
 function fermerLaBarreSiLeFocusSort(evenement: FocusEvent): void {
-  if (!barreDestination.value?.contains(evenement.relatedTarget as Node | null)) barreOuverte.value = false
+  if (!barreDestination.value?.contains(evenement.relatedTarget as Node | null))
+    barreOuverte.value = false
 }
 const ouvrirLaBarre = () => (barreOuverte.value = true)
 /** Échap referme ce qui s'est ouvert sous la barre (RGAA 10.13). */
@@ -115,7 +116,8 @@ watch([arrivee, depart], ([nouvelleArrivee, nouveauDepart], [ancienneArrivee]) =
   if (departDepuisMaPosition.value ? destinationChoisie : nouveauDepart) void validerTrajet()
 })
 
-const enKilometres = (metres: number) => `${(metres / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`
+const enKilometres = (metres: number) =>
+  `${(metres / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`
 
 const annonceItineraire = computed(() => {
   if (calculEnCours.value) return 'Calcul de votre itinéraire…'
@@ -144,9 +146,23 @@ const heureMaintenant = () => {
   return `${String(maintenant.getHours()).padStart(2, '0')}:${String(maintenant.getMinutes()).padStart(2, '0')}`
 }
 
+// Une fois l'itinéraire calculé, la barre se replie en une ligne : la carte reste dégagée.
+const barreDeplieeALaMain = ref(false)
+const barreRepliee = computed(
+  () => Boolean(resultat.value && arrivee.value) && !barreDeplieeALaMain.value,
+)
+async function deplierLaBarre(): Promise<void> {
+  barreDeplieeALaMain.value = true
+  await nextTick()
+  document.getElementById('arrivee')?.focus()
+}
+
 // Un nouvel itinéraire part « maintenant » par défaut.
 watch(resultat, (nouveauResultat) => {
-  if (nouveauResultat) magasinDuree.choisirHeureDepart(heureMaintenant())
+  if (nouveauResultat) {
+    magasinDuree.choisirHeureDepart(heureMaintenant())
+    barreDeplieeALaMain.value = false
+  }
 })
 
 function saisirVitesse(valeur: string | number | undefined): void {
@@ -183,7 +199,8 @@ const ecartDeDistance = (metresRetenu: number, metresPlusCourt: number) => {
 }
 
 const comparaison = computed(() => {
-  if (!resultat.value || dureeMinutes.value === null || dureePlusCourtMinutes.value === null) return null
+  if (!resultat.value || dureeMinutes.value === null || dureePlusCourtMinutes.value === null)
+    return null
   if (resultat.value.retenuEstLePlusCourt) {
     return {
       dejaLePlusCourt: true,
@@ -211,7 +228,8 @@ async function calculerMonItineraire(): Promise<void> {
   await magasinItineraire.calculer(depart.value, arrivee.value)
 }
 
-const descriptionTrajet = (lieuDepart: Lieu, lieuArrivee: Lieu) => `de ${lieuDepart.libelle} à ${lieuArrivee.libelle}`
+const descriptionTrajet = (lieuDepart: Lieu, lieuArrivee: Lieu) =>
+  `de ${lieuDepart.libelle} à ${lieuArrivee.libelle}`
 
 /** « Ma position » : revenir au départ par défaut, la position actuelle. */
 async function utiliserMaPosition(): Promise<void> {
@@ -252,9 +270,11 @@ async function trouverMonDepart(): Promise<void> {
       erreurDepart.value =
         'Position refusée : autorisez la localisation pour GLADYS dans les réglages du téléphone, ou saisissez votre départ.'
     } else if (erreur instanceof ErreurReseau) {
-      erreurDepart.value = 'Trouver l’adresse de votre position a besoin du réseau. Saisissez votre départ plus tard.'
+      erreurDepart.value =
+        'Trouver l’adresse de votre position a besoin du réseau. Saisissez votre départ plus tard.'
     } else {
-      erreurDepart.value = 'Votre position est introuvable pour le moment. Réessayez, ou saisissez votre départ.'
+      erreurDepart.value =
+        'Votre position est introuvable pour le moment. Réessayez, ou saisissez votre départ.'
     }
   } finally {
     positionEnCours.value = false
@@ -263,13 +283,18 @@ async function trouverMonDepart(): Promise<void> {
 }
 
 async function validerTrajet(): Promise<void> {
-  erreurArrivee.value = arrivee.value ? '' : 'Choisissez votre arrivée dans la liste des propositions.'
+  erreurArrivee.value = arrivee.value
+    ? ''
+    : 'Choisissez votre arrivée dans la liste des propositions.'
   if (!arrivee.value) {
     document.getElementById('arrivee')?.focus()
     return
   }
   if (departDepuisMaPosition.value) await trouverMonDepart()
-  else erreurDepart.value = depart.value ? '' : 'Choisissez votre départ dans la liste des propositions.'
+  else
+    erreurDepart.value = depart.value
+      ? ''
+      : 'Choisissez votre départ dans la liste des propositions.'
   if (!depart.value) {
     await nextTick()
     document.getElementById('depart')?.focus()
@@ -296,7 +321,10 @@ const voirLeDetailDuTrajet = () => titreItineraire.value?.focus()
 async function repondreAccord(choix: 'accepte' | 'refuse'): Promise<void> {
   magasinTrajets.choisirAccord(choix)
   if (choix === 'accepte' && trajetEnAttenteDAccord.value) {
-    magasinTrajets.retenirTrajet(trajetEnAttenteDAccord.value.depart, trajetEnAttenteDAccord.value.arrivee)
+    magasinTrajets.retenirTrajet(
+      trajetEnAttenteDAccord.value.depart,
+      trajetEnAttenteDAccord.value.arrivee,
+    )
   }
   trajetEnAttenteDAccord.value = null
   annonce.value =
@@ -349,85 +377,116 @@ async function effacer(confirme: boolean): Promise<void> {
         class="barre-destination"
         @submit.prevent="validerTrajet"
       >
-        <ChampLieu
-          id="arrivee"
-          v-model="arrivee"
-          label="Où allez-vous ?"
-          indication="Obligatoire. Une adresse ou une commune, puis choisissez dans la liste"
-          :en-ligne="enLigne"
-          :erreur-externe="erreurArrivee"
-        >
-          <template #sans-saisie>
-            <!-- mousedown sans effet : le focus reste dans la barre pendant qu'on touche un trajet. -->
-            <div
-              v-if="barreOuverte && accord === 'accepte' && trajetsRecents.length > 0"
-              id="trajets-sous-la-barre"
-              class="fr-mt-1w"
-              @mousedown.prevent
-            >
-              <p id="titre-trajets-sous-la-barre" class="fr-text--sm fr-text--bold fr-mb-1v">Mes trajets récents</p>
-              <ul class="fr-p-0 fr-m-0 trajets-recents" aria-labelledby="titre-trajets-sous-la-barre">
-                <li v-for="trajet in trajetsRecents" :key="trajet.valideLe">
-                  <DsfrButton
-                    type="button"
-                    tertiary
-                    no-outline
-                    size="lg"
-                    icon="fr-icon-time-line"
-                    class="trajet-recent-sous-la-barre"
-                    :label="`De ${trajet.depart.libelle} à ${trajet.arrivee.libelle}`"
-                    :aria-label="`Reprendre le trajet ${descriptionTrajet(trajet.depart, trajet.arrivee)}`"
-                    @click="reprendre(trajet)"
-                  />
-                </li>
-              </ul>
-            </div>
-          </template>
-        </ChampLieu>
-
-        <p v-if="departDepuisMaPosition" class="ligne-depart fr-mb-0">
-          <span>Départ :</span>
-          <DsfrButton
-            id="bouton-depart-ma-position"
-            type="button"
-            tertiary
-            no-outline
-            icon="fr-icon-map-pin-2-line"
-            class="bouton-barre"
-            :label="positionEnCours ? 'Recherche de votre position…' : 'Ma position'"
-            :aria-label="positionEnCours ? 'Recherche de votre position…' : 'Départ : Ma position. Changer le départ'"
-            :disabled="positionEnCours"
-            @click="changerDeDepart"
-          />
-        </p>
-        <template v-else>
-          <ChampLieu id="depart" v-model="depart" label="Départ" :en-ligne="enLigne" :erreur-externe="erreurDepart" />
-          <DsfrButton
-            type="button"
-            tertiary
-            no-outline
-            icon="fr-icon-map-pin-2-line"
-            class="bouton-barre"
-            label="Utiliser ma position actuelle"
-            @click="utiliserMaPosition"
-          />
-        </template>
         <DsfrButton
-          v-if="arrivee && !resultat && !calculEnCours"
-          type="submit"
-          size="lg"
-          class="fr-mt-1w"
-          label="Valider mon trajet"
-          icon="fr-icon-check-line"
-          :disabled="positionEnCours"
+          v-if="barreRepliee"
+          id="bouton-deplier-barre"
+          type="button"
+          tertiary
+          no-outline
+          icon="fr-icon-search-line"
+          class="bouton-barre bouton-deplier-barre"
+          :label="`Vers ${arrivee?.libelle}`"
+          :aria-label="`Destination : ${arrivee?.libelle}. Modifier le trajet`"
+          aria-controls="champs-du-trajet"
+          aria-expanded="false"
+          @click="deplierLaBarre"
         />
-        <DsfrAlert
-          v-if="!enLigne"
-          type="info"
-          small
-          class="fr-mt-1w"
-          description="Sans réseau, la recherche d’adresse et la position actuelle sont indisponibles. Vos trajets récents restent utilisables."
-        />
+        <div v-show="!barreRepliee" id="champs-du-trajet">
+          <ChampLieu
+            id="arrivee"
+            v-model="arrivee"
+            label="Où allez-vous ?"
+            indication="Obligatoire. Une adresse ou une commune, puis choisissez dans la liste"
+            :en-ligne="enLigne"
+            :erreur-externe="erreurArrivee"
+          >
+            <template #sans-saisie>
+              <!-- mousedown sans effet : le focus reste dans la barre pendant qu'on touche un trajet. -->
+              <div
+                v-if="barreOuverte && accord === 'accepte' && trajetsRecents.length > 0"
+                id="trajets-sous-la-barre"
+                class="fr-mt-1w"
+                @mousedown.prevent
+              >
+                <p id="titre-trajets-sous-la-barre" class="fr-text--sm fr-text--bold fr-mb-1v">
+                  Mes trajets récents
+                </p>
+                <ul
+                  class="fr-p-0 fr-m-0 trajets-recents"
+                  aria-labelledby="titre-trajets-sous-la-barre"
+                >
+                  <li v-for="trajet in trajetsRecents" :key="trajet.valideLe">
+                    <DsfrButton
+                      type="button"
+                      tertiary
+                      no-outline
+                      size="lg"
+                      icon="fr-icon-time-line"
+                      class="trajet-recent-sous-la-barre"
+                      :label="`De ${trajet.depart.libelle} à ${trajet.arrivee.libelle}`"
+                      :aria-label="`Reprendre le trajet ${descriptionTrajet(trajet.depart, trajet.arrivee)}`"
+                      @click="reprendre(trajet)"
+                    />
+                  </li>
+                </ul>
+              </div>
+            </template>
+          </ChampLieu>
+
+          <p v-if="departDepuisMaPosition" class="ligne-depart fr-mb-0">
+            <span>Départ :</span>
+            <DsfrButton
+              id="bouton-depart-ma-position"
+              type="button"
+              tertiary
+              no-outline
+              icon="fr-icon-map-pin-2-line"
+              class="bouton-barre"
+              :label="positionEnCours ? 'Recherche de votre position…' : 'Ma position'"
+              :aria-label="
+                positionEnCours
+                  ? 'Recherche de votre position…'
+                  : 'Départ : Ma position. Changer le départ'
+              "
+              :disabled="positionEnCours"
+              @click="changerDeDepart"
+            />
+          </p>
+          <template v-else>
+            <ChampLieu
+              id="depart"
+              v-model="depart"
+              label="Départ"
+              :en-ligne="enLigne"
+              :erreur-externe="erreurDepart"
+            />
+            <DsfrButton
+              type="button"
+              tertiary
+              no-outline
+              icon="fr-icon-map-pin-2-line"
+              class="bouton-barre"
+              label="Utiliser ma position actuelle"
+              @click="utiliserMaPosition"
+            />
+          </template>
+          <DsfrButton
+            v-if="arrivee && !resultat && !calculEnCours"
+            type="submit"
+            size="lg"
+            class="fr-mt-1w"
+            label="Valider mon trajet"
+            icon="fr-icon-check-line"
+            :disabled="positionEnCours"
+          />
+          <DsfrAlert
+            v-if="!enLigne"
+            type="info"
+            small
+            class="fr-mt-1w"
+            description="Sans réseau, la recherche d’adresse et la position actuelle sont indisponibles. Vos trajets récents restent utilisables."
+          />
+        </div>
       </form>
       <div class="fond-du-menu">
         <MenuAPropos />
@@ -449,10 +508,17 @@ async function effacer(confirme: boolean): Promise<void> {
         >
           <p v-if="calculEnCours" class="fr-mb-0">Calcul de votre itinéraire…</p>
           <template v-else>
-            <DsfrAlert v-if="erreurItineraire" type="error" small :description="erreurItineraire" class="fr-mb-1w" />
+            <DsfrAlert
+              v-if="erreurItineraire"
+              type="error"
+              small
+              :description="erreurItineraire"
+              class="fr-mb-1w"
+            />
             <p v-else-if="resultat" class="fr-mb-1w">
               <strong class="fr-text--lg">{{ horairesEstimes?.duree ?? '' }}</strong>
-              <span v-if="horairesEstimes"> · </span>{{ enKilometres(resultat.itineraire.distanceMetres) }}
+              <span v-if="horairesEstimes"> · </span
+              >{{ enKilometres(resultat.itineraire.distanceMetres) }}
               <span v-if="horairesEstimes" class="fr-text--sm fr-mb-0 ligne-arrivee">
                 Arrivée vers {{ horairesEstimes.arrivee }}
               </span>
@@ -476,7 +542,9 @@ async function effacer(confirme: boolean): Promise<void> {
     <p id="annonce-trajet" role="status" class="fr-sr-only">{{ annonce }}</p>
 
     <section v-if="depart && arrivee" class="fr-mb-4w" aria-labelledby="titre-itineraire">
-      <h2 id="titre-itineraire" ref="titreItineraire" tabindex="-1" class="fr-h5">Mon itinéraire</h2>
+      <h2 id="titre-itineraire" ref="titreItineraire" tabindex="-1" class="fr-h5">
+        Mon itinéraire
+      </h2>
       <p>Il ne passe jamais par une autoroute ni une voie rapide.</p>
       <DsfrRadioButtonSet
         name="seuil-detour"
@@ -485,7 +553,8 @@ async function effacer(confirme: boolean): Promise<void> {
         :model-value="seuilDetour"
         :options="optionsDeDetour"
         @update:model-value="
-          (nouveauSeuil: string | number | boolean | undefined) => magasinItineraire.choisirSeuil(Number(nouveauSeuil))
+          (nouveauSeuil: string | number | boolean | undefined) =>
+            magasinItineraire.choisirSeuil(Number(nouveauSeuil))
         "
       />
       <DsfrRadioButtonSet
@@ -496,7 +565,9 @@ async function effacer(confirme: boolean): Promise<void> {
         :options="optionsDeCalculateur"
         @update:model-value="
           (nouveauCalculateur: string | number | boolean | undefined) =>
-            magasinItineraire.choisirCalculateur(nouveauCalculateur === 'openstreetmap' ? 'openstreetmap' : 'ign')
+            magasinItineraire.choisirCalculateur(
+              nouveauCalculateur === 'openstreetmap' ? 'openstreetmap' : 'ign',
+            )
         "
       />
       <p v-if="!enLigne" class="fr-mb-2w">
@@ -559,8 +630,8 @@ async function effacer(confirme: boolean): Promise<void> {
         </dl>
         <p id="annonce-duree" role="status" class="fr-sr-only">{{ annonceDuree }}</p>
         <p class="fr-text--sm">
-          Calculée à {{ vitesseHabituelle.toLocaleString('fr-FR') }} km/h au plus, et moins vite si la route est plus
-          lente.
+          Calculée à {{ vitesseHabituelle.toLocaleString('fr-FR') }} km/h au plus, et moins vite si
+          la route est plus lente.
         </p>
         <DsfrInputGroup
           id="vitesse-habituelle"
@@ -582,7 +653,8 @@ async function effacer(confirme: boolean): Promise<void> {
           hint="Par défaut : maintenant. Vide : départ maintenant."
           type="time"
           @update:model-value="
-            (heureSaisie: string | number | undefined) => magasinDuree.choisirHeureDepart(String(heureSaisie ?? ''))
+            (heureSaisie: string | number | undefined) =>
+              magasinDuree.choisirHeureDepart(String(heureSaisie ?? ''))
           "
         />
       </template>
@@ -604,8 +676,8 @@ async function effacer(confirme: boolean): Promise<void> {
       <template v-if="resultat && resultat.itineraire.trace.length >= 2">
         <h3 class="fr-h6 fr-mt-3w">Mon trajet sur la carte</h3>
         <p>
-          Il est tracé sur la carte, en haut de l’écran. Gardez les yeux sur la route : regardez la carte seulement à
-          l’arrêt.
+          Il est tracé sur la carte, en haut de l’écran. Gardez les yeux sur la route : regardez la
+          carte seulement à l’arrêt.
         </p>
         <DsfrButton
           type="button"
@@ -625,7 +697,9 @@ async function effacer(confirme: boolean): Promise<void> {
             {{ enKilometres(etape.distanceMetres) }}
             <DsfrBadge
               v-if="etape.fortTrafic"
-              :label="etape.departementale ? 'Départementale à fort trafic' : 'Grand axe à fort trafic'"
+              :label="
+                etape.departementale ? 'Départementale à fort trafic' : 'Grand axe à fort trafic'
+              "
               type="warning"
               small
               class="fr-ml-1w"
@@ -641,23 +715,46 @@ async function effacer(confirme: boolean): Promise<void> {
         </ol>
       </template>
     </section>
-    <DsfrAlert v-if="erreurEnregistrement" type="error" small :description="erreurEnregistrement" class="fr-mb-2w" />
+    <DsfrAlert
+      v-if="erreurEnregistrement"
+      type="error"
+      small
+      :description="erreurEnregistrement"
+      class="fr-mb-2w"
+    />
 
-    <section v-if="trajetEnAttenteDAccord" class="fr-mb-4w fr-p-3w question-accord" aria-labelledby="titre-accord">
+    <section
+      v-if="trajetEnAttenteDAccord"
+      class="fr-mb-4w fr-p-3w question-accord"
+      aria-labelledby="titre-accord"
+    >
       <h2 id="titre-accord" ref="titreQuestionAccord" tabindex="-1" class="fr-h5">
         Garder mes {{ NOMBRE_DE_TRAJETS_GARDES }} derniers trajets sur ce téléphone ?
       </h2>
       <p>
-        Vous pourrez les reprendre d’un geste, même sans réseau. Ils restent sur ce téléphone et vous pouvez les effacer
-        à tout moment.
+        Vous pourrez les reprendre d’un geste, même sans réseau. Ils restent sur ce téléphone et
+        vous pouvez les effacer à tout moment.
       </p>
       <div class="fr-btns-group fr-btns-group--inline-sm">
-        <DsfrButton type="button" size="lg" label="Oui, garder mes trajets" @click="repondreAccord('accepte')" />
-        <DsfrButton type="button" size="lg" secondary label="Non, ne rien garder" @click="repondreAccord('refuse')" />
+        <DsfrButton
+          type="button"
+          size="lg"
+          label="Oui, garder mes trajets"
+          @click="repondreAccord('accepte')"
+        />
+        <DsfrButton
+          type="button"
+          size="lg"
+          secondary
+          label="Non, ne rien garder"
+          @click="repondreAccord('refuse')"
+        />
       </div>
     </section>
 
-    <h2 id="titre-trajets-recents" ref="titreTrajetsRecents" tabindex="-1" class="fr-h5">Mes trajets récents</h2>
+    <h2 id="titre-trajets-recents" ref="titreTrajetsRecents" tabindex="-1" class="fr-h5">
+      Mes trajets récents
+    </h2>
     <template v-if="accord === 'accepte'">
       <p v-if="trajetsRecents.length === 0">Aucun trajet récent pour l’instant.</p>
       <template v-else>
@@ -675,9 +772,16 @@ async function effacer(confirme: boolean): Promise<void> {
           </li>
         </ul>
         <div v-if="confirmationEffacement">
-          <p ref="questionEffacement" tabindex="-1">Effacer tous vos trajets récents de ce téléphone ?</p>
+          <p ref="questionEffacement" tabindex="-1">
+            Effacer tous vos trajets récents de ce téléphone ?
+          </p>
           <div class="fr-btns-group fr-btns-group--inline-sm">
-            <DsfrButton type="button" size="lg" label="Oui, effacer mes trajets récents" @click="effacer(true)" />
+            <DsfrButton
+              type="button"
+              size="lg"
+              label="Oui, effacer mes trajets récents"
+              @click="effacer(true)"
+            />
             <DsfrButton type="button" size="lg" secondary label="Annuler" @click="effacer(false)" />
           </div>
         </div>
@@ -703,7 +807,8 @@ async function effacer(confirme: boolean): Promise<void> {
       />
     </template>
     <p v-else>
-      Après votre premier trajet, nous vous demanderons si vous voulez garder vos trajets récents sur ce téléphone.
+      Après votre premier trajet, nous vous demanderons si vous voulez garder vos trajets récents
+      sur ce téléphone.
     </p>
   </div>
 </template>
@@ -767,6 +872,10 @@ async function effacer(confirme: boolean): Promise<void> {
 /* Cibles tactiles d'au moins 44 px. */
 .bouton-barre {
   min-height: 2.75rem;
+}
+.bouton-deplier-barre {
+  width: 100%;
+  text-align: left;
 }
 .trajet-recent-sous-la-barre {
   width: 100%;

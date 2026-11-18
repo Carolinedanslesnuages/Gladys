@@ -560,6 +560,40 @@ describe('Écran « Préparer mon trajet »', () => {
       ecran.unmount()
     })
 
+    it('Demande #30 : une fois l’itinéraire calculé, la barre se replie ; la toucher la rouvre', async () => {
+      simulerLocalStorage({
+        'gladys:accord-historique': JSON.stringify('accepte'),
+        'gladys:trajets-recents': JSON.stringify([
+          {
+            depart: { libelle: 'Lyon', latitude: 45.75, longitude: 4.85 },
+            arrivee: { libelle: 'Vienne', latitude: 45.52, longitude: 4.87 },
+            valideLe: '2026-11-16T10:00:00Z',
+          },
+        ]),
+      })
+      fetchSimule
+        .mockResolvedValueOnce(reponseAvecVitesses())
+        .mockResolvedValueOnce(reponseAvecVitesses())
+      const ecran = monter()
+      expect(ecran.find('#bouton-deplier-barre').exists()).toBe(false)
+      await boutonNomme(ecran, 'Reprendre le trajet de Lyon à Vienne').trigger('click')
+      await flushPromises()
+      const boutonDeplier = ecran.find('#bouton-deplier-barre')
+      expect(boutonDeplier.text()).toContain('Vers Vienne')
+      expect(boutonDeplier.attributes('aria-label')).toBe(
+        'Destination : Vienne. Modifier le trajet',
+      )
+      expect(ecran.find('#champs-du-trajet').isVisible()).toBe(false)
+      await boutonDeplier.trigger('click')
+      await flushPromises()
+      expect(ecran.find('#bouton-deplier-barre').exists()).toBe(false)
+      expect(ecran.find('#champs-du-trajet').isVisible()).toBe(true)
+      expect(document.activeElement?.id).toBe('arrivee')
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecran.unmount()
+    })
+
     it('Critères 1 et 2 : durée à 45 km/h au plus (30 sur la route lente), arrivée à côté', async () => {
       const ecran = monter()
       await calculerPuisPartirA(ecran, '08:00')

@@ -236,6 +236,11 @@ describe('Carte du trajet', () => {
         'Il vous reste 10,9 km jusqu’à l’arrivée.',
       )
       expect(ecran.find('#avancement-trajet').text()).not.toContain('du trajet prévu')
+      // Demande #30 : seul « 10,9 km » se voit ; la phrase entière reste lue par les lecteurs d'écran.
+      expect(ecran.find('#avancement-trajet strong').text()).toBe('10,9 km')
+      expect(
+        ecran.findAll('#avancement-trajet .fr-sr-only').map((morceau) => morceau.text()),
+      ).toEqual(['Il vous reste', 'jusqu’à l’arrivée.'])
       ecran.unmount()
     })
 
