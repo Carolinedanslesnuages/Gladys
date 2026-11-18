@@ -144,6 +144,213 @@ describe('Carte du trajet', () => {
     ecran.unmount()
   })
 
+  describe('Demande #20 : suivre ma position sur la carte, comme un GPS', () => {
+    type SurSucces = (position: { coords: { latitude: number; longitude: number } }) => void
+    type SurEchec = (erreur: { code: number }) => void
+    let surSucces: SurSucces | null
+    let surEchec: SurEchec | null
+    let arretsDuSuivi: number
+
+    beforeEach(() => {
+      surSucces = null
+      surEchec = null
+      arretsDuSuivi = 0
+      Object.defineProperty(navigator, 'geolocation', {
+        configurable: true,
+        value: {
+          watchPosition: (succes: SurSucces, echec: SurEchec) => {
+            surSucces = succes
+            surEchec = echec
+            return 1
+          },
+          clearWatch: () => (arretsDuSuivi += 1),
+        },
+      })
+    })
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, 'geolocation')
+      vi.unstubAllGlobals()
+    })
+
+    const recevoirPosition = async (ecran: ReturnType<typeof monter>, latitude: number, longitude: number) => {
+      surSucces!({ coords: { latitude, longitude } })
+      await ecran.vm.$nextTick()
+    }
+
+    it('place un repère « Vous », centre la carte sur la personne et dit la distance restante', async () => {
+      const ecran = monter()
+      await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+      expect(ecran.find('#annonce-suivi').text()).toBe('Recherche de votre position…')
+      await recevoirPosition(ecran, 45.6, 4.95)
+      expect(reperesPlaces.map((repere) => repere.libelle)).toEqual(['Départ', 'Arrivée', 'Vous'])
+      expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.6, 3)
+      expect(carteAffichee!.getZoom()).toBe(16)
+      expect(ecran.find('#annonce-suivi').text()).toBe('Position trouvée : la carte vous suit.')
+      // Du point du milieu jusqu'à Vienne : environ 10,9 km.
+      expect(ecran.find('#avancement-trajet').text()).toContain('Il vous reste 10,9 km jusqu’à l’arrivée.')
+      expect(ecran.find('#avancement-trajet').text()).not.toContain('du trajet prévu')
+      ecran.unmount()
+    })
+
+    it('suit la personne quand elle avance (sans animation si elle les a réduites)', async () => {
+      // jsdom ne joue pas les animations : on simule « réduire les animations ».
+      vi.stubGlobal('matchMedia', (requete: string) => ({ matches: requete.includes('reduce') }))
+      const ecran = monter()
+      await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+      await recevoirPosition(ecran, 45.6, 4.95)
+      await recevoirPosition(ecran, 45.52, 4.87)
+      expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.52, 3)
+      expect(reperesPlaces.filter((repere) => repere.libelle === 'Vous')).toHaveLength(1)
+      expect(ecran.find('#avancement-trajet').text()).toContain('Il vous reste 0 m')
+      ecran.unmount()
+    })
+
+    it('prévient, par écrit, quand la personne quitte le trajet', async () => {
+      const ecran = monter()
+      await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+      await recevoirPosition(ecran, 45.6, 5.0)
+      expect(ecran.find('#avancement-trajet').text()).toContain('du trajet prévu')
+      ecran.unmount()
+    })
+
+    it('« Arrêter de suivre ma position » retire le repère et coupe la localisation', async () => {
+      const ecran = monter()
+      await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+      await recevoirPosition(ecran, 45.6, 4.95)
+      await boutonNomme(ecran, 'Arrêter de suivre ma position').trigger('click')
+      expect(arretsDuSuivi).toBe(1)
+      expect(ecran.find('#carte-trajet').text()).not.toContain('Vous')
+      expect(ecran.find('#avancement-trajet').exists()).toBe(false)
+      expect(ecran.find('#annonce-suivi').text()).toBe('La carte ne suit plus votre position.')
+      ecran.unmount()
+    })
+
+    it('position refusée : explique comment l’autoriser', async () => {
+      const ecran = monter()
+      await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+      surEchec!({ code: 1 })
+      await ecran.vm.$nextTick()
+      expect(ecran.text()).toContain('Position refusée : autorisez la localisation pour GLADYS')
+      expect(boutonNomme(ecran, 'Suivre ma position sur la carte')).toBeTruthy()
+      ecran.unmount()
+    })
+
+    it('coupe la localisation quand le réseau tombe (la carte disparaît)', async () => {
+      const ecran = monter()
+      await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+      await ecran.setProps({ enLigne: false })
+      expect(arretsDuSuivi).toBe(1)
+      ecran.unmount()
+    })
+
+    const recevoirPositionEtCap = async (
+      ecran: ReturnType<typeof monter>,
+      latitude: number,
+      longitude: number,
+      heading?: number,
+    ) => {
+      ;(surSucces as unknown as (position: { coords: object }) => void)({ coords: { latitude, longitude, heading } })
+      await ecran.vm.$nextTick()
+    }
+    const repereVous = () => document.querySelector<HTMLElement>('.repere-vous')!
+
+    it('« Vous » est un rond tant que la direction est inconnue, puis une flèche tournée dans le sens de la marche', async () => {
+      const ecran = monter()
+      await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+      await recevoirPosition(ecran, 45.6, 4.95)
+      expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(true)
+      expect(repereVous().textContent).toBe('Vous')
+      // Sans direction donnée par le GPS : celle du déplacement (ici, plein sud).
+      await recevoirPosition(ecran, 45.59, 4.95)
+      expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(false)
+      expect(repereVous().style.getPropertyValue('--direction-vous')).toBe('180deg')
+      // Direction donnée par le GPS : elle prime.
+      await recevoirPositionEtCap(ecran, 45.59, 4.95, 90)
+      expect(repereVous().style.getPropertyValue('--direction-vous')).toBe('90deg')
+      ecran.unmount()
+    })
+
+    it('déplacer la carte la détache ; « Me recentrer sur ma position » la ramène sur la personne', async () => {
+      vi.stubGlobal('matchMedia', (requete: string) => ({ matches: requete.includes('reduce') }))
+      const ecran = monter()
+      await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+      await recevoirPosition(ecran, 45.6, 4.95)
+      expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeUndefined()
+      await ecran.find('#carte-trajet').trigger('keydown', { key: 'ArrowLeft' })
+      expect(ecran.find('#annonce-suivi').text()).toContain('La carte ne vous suit plus')
+      carteAffichee!.setView(Leaflet.latLng(45.7, 4.8), 12, { animate: false })
+      await recevoirPosition(ecran, 45.59, 4.95)
+      expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.7, 3)
+      await boutonNomme(ecran, 'Me recentrer sur ma position').trigger('click')
+      expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.59, 3)
+      expect(carteAffichee!.getZoom()).toBe(16)
+      expect(ecran.find('#annonce-suivi').text()).toBe('Carte recentrée : la carte vous suit.')
+      ecran.unmount()
+    })
+
+    describe('plein écran', () => {
+      const monterDansUnePage = () => {
+        const autreContenu = document.createElement('p')
+        autreContenu.id = 'reste-de-la-page'
+        autreContenu.textContent = 'Étapes du trajet'
+        document.body.appendChild(autreContenu)
+        return monter()
+      }
+
+      it('occupe tout l’écran, suit la personne, met le reste de la page de côté et donne le focus à « Quitter »', async () => {
+        const ecran = monterDansUnePage()
+        await boutonNomme(ecran, 'Afficher la carte en plein écran').trigger('click')
+        await ecran.vm.$nextTick()
+        const zone = ecran.find('#zone-carte')
+        expect(zone.classes()).toContain('zone-carte--plein-ecran')
+        expect(zone.attributes('role')).toBe('dialog')
+        expect(zone.attributes('aria-label')).toBe('Carte en plein écran')
+        expect(ecran.find('#annonce-suivi').text()).toBe('Recherche de votre position…')
+        expect(document.getElementById('reste-de-la-page')!.hasAttribute('inert')).toBe(true)
+        expect(document.activeElement?.textContent?.trim()).toBe('Quitter le plein écran')
+        expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeTruthy()
+        await recevoirPosition(ecran, 45.6, 4.95)
+        expect(ecran.find('#avancement-trajet').text()).toContain('Il vous reste 10,9 km')
+        ecran.unmount()
+      })
+
+      it('« Quitter le plein écran » (ou Échap) rend la page, sans couper le suivi', async () => {
+        const ecran = monterDansUnePage()
+        await boutonNomme(ecran, 'Afficher la carte en plein écran').trigger('click')
+        await ecran.vm.$nextTick()
+        await boutonNomme(ecran, 'Quitter le plein écran').trigger('click')
+        await ecran.vm.$nextTick()
+        expect(ecran.find('#zone-carte').classes()).not.toContain('zone-carte--plein-ecran')
+        expect(document.getElementById('reste-de-la-page')!.hasAttribute('inert')).toBe(false)
+        expect(document.activeElement?.textContent?.trim()).toBe('Afficher la carte en plein écran')
+        expect(boutonNomme(ecran, 'Arrêter de suivre ma position')).toBeTruthy()
+        await boutonNomme(ecran, 'Afficher la carte en plein écran').trigger('click')
+        await ecran.vm.$nextTick()
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+        await ecran.vm.$nextTick()
+        expect(ecran.find('#zone-carte').classes()).not.toContain('zone-carte--plein-ecran')
+        ecran.unmount()
+      })
+
+      it('aucune violation d’accessibilité automatique en plein écran', async () => {
+        const ecran = monter()
+        await boutonNomme(ecran, 'Afficher la carte en plein écran').trigger('click')
+        await ecran.vm.$nextTick()
+        await recevoirPosition(ecran, 45.6, 5.0)
+        expect(await violationsAccessibilite(document.body)).toEqual([])
+        ecran.unmount()
+      })
+    })
+
+    it('aucune violation d’accessibilité automatique pendant le suivi, même hors du trajet', async () => {
+      const ecran = monter()
+      await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+      await recevoirPosition(ecran, 45.6, 5.0)
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      ecran.unmount()
+    })
+  })
+
   it('aucune violation d’accessibilité automatique, avec et sans réseau', async () => {
     const ecran = monter()
     expect(await violationsAccessibilite(document.body)).toEqual([])

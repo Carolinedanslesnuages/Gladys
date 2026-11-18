@@ -9,3 +9,4 @@
 | [0005](0005-etapes-et-comparaison-du-trajet.md) | Étapes du trajet (villages, routes) et comparaison avec le trajet le plus court | Accepted | 2026-11-18 |
 | [0006](0006-carte-du-trajet.md) | Carte du trajet (Leaflet, fond Plan IGN), indisponible sans réseau | Accepted | 2026-11-18 |
 | [0007](0007-calcul-d-itineraire-openstreetmap.md) | Essai d'OpenStreetMap (Valhalla) pour le calcul d'itinéraire, au choix à côté de l'IGN | Accepted | 2026-11-18 |
+| [0008](0008-guidage-sur-la-carte.md) | Suivre sa position sur la carte pendant le trajet (sur l'appareil, sans enregistrement) | Accepted | 2026-11-18 |
