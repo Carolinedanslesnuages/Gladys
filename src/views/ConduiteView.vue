@@ -22,7 +22,8 @@ const trajetAbsent = computed(() => !resultat.value)
 /** La carte du trajet reste visible pendant le guidage ; départ et arrivée sont les deux bouts du tracé. */
 const traceDuTrajet = computed(() => resultat.value?.itineraire.trace ?? [])
 const lieuDuPoint = (libelle: string, indexDuPoint: number) => {
-  const point = traceDuTrajet.value.at(indexDuPoint)
+  const trace = traceDuTrajet.value
+  const point = trace[indexDuPoint < 0 ? trace.length + indexDuPoint : indexDuPoint]
   return point ? { libelle, latitude: point.latitude, longitude: point.longitude } : null
 }
 const departDuTrajet = computed(() => lieuDuPoint('Départ', 0))
