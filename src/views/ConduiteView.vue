@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import Alerte from '@/components/interface/Alerte.vue'
 import Bouton from '@/components/interface/Bouton.vue'
+import CarteTrajet from '@/components/CarteTrajet.vue'
 import { distanceLisible } from '@/services/consignes'
 import { useConduiteStore } from '@/stores/conduite'
 import { useItineraireStore } from '@/stores/itineraire'
@@ -17,6 +18,26 @@ const magasinVoix = useVoixStore()
 const { active: voixActive, erreur: erreurVoix } = storeToRefs(magasinVoix)
 
 const trajetAbsent = computed(() => !resultat.value)
+
+/** La carte du trajet reste visible pendant le guidage ; départ et arrivée sont les deux bouts du tracé. */
+const traceDuTrajet = computed(() => resultat.value?.itineraire.trace ?? [])
+const lieuDuPoint = (libelle: string, indexDuPoint: number) => {
+  const point = traceDuTrajet.value.at(indexDuPoint)
+  return point ? { libelle, latitude: point.latitude, longitude: point.longitude } : null
+}
+const departDuTrajet = computed(() => lieuDuPoint('Départ', 0))
+const arriveeDuTrajet = computed(() => lieuDuPoint('Arrivée', -1))
+const enLigne = ref(navigator.onLine)
+const suivreLeReseau = () => (enLigne.value = navigator.onLine)
+window.addEventListener('online', suivreLeReseau)
+window.addEventListener('offline', suivreLeReseau)
+onUnmounted(() => {
+  window.removeEventListener('online', suivreLeReseau)
+  window.removeEventListener('offline', suivreLeReseau)
+})
+
+/** Voix active : le son suffit. Le texte reste lu par les lecteurs d'écran mais libère la place de la carte. */
+const texteMasque = computed(() => voixActive.value)
 
 /**
  * Annonce aux lecteurs d'écran : seulement quand la consigne change, ou quand la distance change
@@ -82,8 +103,8 @@ onUnmounted(() => magasinConduite.arreter())
       </p>
       <section v-else aria-labelledby="titre-consigne">
         <h2 id="titre-consigne" class="visuellement-cache">Prochaine consigne</h2>
-        <p id="consigne-en-cours" class="consigne">{{ consigne.texte }}</p>
-        <p id="distance-consigne" class="distance-consigne">
+        <p id="consigne-en-cours" :class="['consigne', { 'visuellement-cache': texteMasque }]">{{ consigne.texte }}</p>
+        <p id="distance-consigne" :class="['distance-consigne', { 'visuellement-cache': texteMasque }]">
           <span class="visuellement-cache">Distance : </span>{{ distanceLisible(consigne.distanceMetres) }}
         </p>
       </section>
@@ -108,6 +129,16 @@ onUnmounted(() => magasinConduite.arreter())
         />
       </div>
     </template>
+
+    <div v-if="!trajetAbsent" class="carte-conduite marge-haut-6">
+      <CarteTrajet
+        :trace="traceDuTrajet"
+        :depart="departDuTrajet"
+        :arrivee="arriveeDuTrajet"
+        :en-ligne="enLigne"
+        suivre-des-l-ouverture
+      />
+    </div>
 
     <Bouton
       id="bouton-arreter-trajet"
@@ -147,6 +178,11 @@ onUnmounted(() => magasinConduite.arreter())
 }
 .commande-voix p {
   margin: 0;
+}
+.carte-conduite {
+  position: relative;
+  height: 60vh;
+  min-height: 18rem;
 }
 .position-indisponible {
   border: 2px solid var(--erreur);
