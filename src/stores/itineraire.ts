@@ -50,6 +50,20 @@ export const useItineraireStore = defineStore('itineraire', () => {
     }
   }
 
+  /**
+   * Calcule un chemin avec le calculateur choisi, sans toucher au trajet affiché (recalcul en
+   * conduite). Échoue si le réseau manque.
+   */
+  function calculerUnChemin(depart: Lieu, arrivee: Lieu): Promise<ResultatItineraire> {
+    const calculerAvec = calculateur.value === 'openstreetmap' ? calculerItineraireOpenStreetMap : calculerItineraire
+    return calculerAvec(depart, arrivee, seuilDetour.value)
+  }
+
+  /** Remplace le trajet suivi par un trajet corrigé en route ; le trajet favori enregistré n'est pas touché. */
+  function remplacerLeTrajetSuivi(nouveauResultat: ResultatItineraire): void {
+    resultat.value = nouveauResultat
+  }
+
   /** Remet un itinéraire déjà calculé (un trajet favori) : aucun réseau nécessaire. */
   function restaurer(resultatEnregistre: ResultatItineraire, calculateurEnregistre: Calculateur | null): void {
     resultat.value = resultatEnregistre
@@ -73,6 +87,8 @@ export const useItineraireStore = defineStore('itineraire', () => {
     choisirSeuil,
     choisirCalculateur,
     calculer,
+    calculerUnChemin,
+    remplacerLeTrajetSuivi,
     restaurer,
     oublier,
   }
