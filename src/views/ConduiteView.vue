@@ -10,7 +10,7 @@ import { useItineraireStore } from '@/stores/itineraire'
 
 const routeur = useRouter()
 const magasinConduite = useConduiteStore()
-const { etat, consigne, consignesAbsentes } = storeToRefs(magasinConduite)
+const { etat, consigne, consignesAbsentes, voixAbsente } = storeToRefs(magasinConduite)
 const { resultat } = storeToRefs(useItineraireStore())
 
 const trajetAbsent = computed(() => !resultat.value)
@@ -85,6 +85,14 @@ onUnmounted(() => magasinConduite.arreter())
         </p>
       </section>
       <p id="annonce-consigne" role="status" class="visuellement-cache">{{ annonce }}</p>
+      <div role="status">
+        <Alerte
+          v-if="voixAbsente"
+          id="voix-absente"
+          type="warning"
+          description="Pas de voix française sur cet appareil : les consignes ne sont pas dites à voix haute. Elles restent affichées à l’écran."
+        />
+      </div>
     </template>
 
     <Bouton
