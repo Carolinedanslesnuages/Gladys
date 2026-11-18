@@ -54,7 +54,10 @@ describe('Carte du trajet', () => {
     const ajouterRepereOriginal = Leaflet.Marker.prototype.onAdd
     vi.spyOn(Leaflet.Marker.prototype, 'onAdd').mockImplementation(function (this: Leaflet.Marker, carte) {
       const resultat = ajouterRepereOriginal.call(this, carte)
-      reperesPlaces.push({ libelle: this.getElement()?.textContent ?? '', position: this.getLatLng() })
+      reperesPlaces.push({
+        libelle: this.getElement()?.textContent ?? '',
+        position: this.getLatLng(),
+      })
       return resultat
     })
   })
@@ -262,7 +265,9 @@ describe('Carte du trajet', () => {
       longitude: number,
       heading?: number,
     ) => {
-      ;(surSucces as unknown as (position: { coords: object }) => void)({ coords: { latitude, longitude, heading } })
+      ;(surSucces as unknown as (position: { coords: object }) => void)({
+        coords: { latitude, longitude, heading },
+      })
       await ecran.vm.$nextTick()
     }
     const repereVous = () => document.querySelector<HTMLElement>('.repere-vous')!
@@ -302,6 +307,88 @@ describe('Carte du trajet', () => {
       ecran.unmount()
     })
 
+    describe('Demande #26 : véhicule plus bas, carte tournée dans le sens de la marche', () => {
+      // jsdom ne sait pas faire tourner : on lui prête les transformations 3D d'un vrai navigateur.
+      const navigateur = Leaflet.Browser as { any3d: boolean }
+      let transformations3dReelles: boolean
+      beforeEach(() => {
+        transformations3dReelles = navigateur.any3d
+        navigateur.any3d = true
+        vi.stubGlobal('matchMedia', (requete: string) => ({ matches: requete.includes('reduce') }))
+      })
+      afterEach(() => {
+        navigateur.any3d = transformations3dReelles
+      })
+      /**
+       * Du véhicule au centre demandé à la carte, en pixels de carte non tournée (x vers l'est, y vers
+       * le sud). jsdom ne mesure pas une carte tournée : on lit le centre demandé à Leaflet.
+       */
+      const duVehiculeAuCentre = () => {
+        const centresDemandes = vi.mocked(Leaflet.Map.prototype.setView).mock.calls
+        const [centreDemande, zoom] = centresDemandes[centresDemandes.length - 1]!
+        return carteAffichee!
+          .project(centreDemande, zoom)
+          .subtract(carteAffichee!.project(Leaflet.latLng(45.6, 4.95), zoom))
+      }
+      beforeEach(() => {
+        // Une taille neuve à chaque appel : le module de rotation divise le point reçu.
+        vi.spyOn(Leaflet.Map.prototype, 'getSize').mockImplementation(() => Leaflet.point(320, 288))
+        const centrerOriginal = Leaflet.Map.prototype.setView
+        vi.spyOn(Leaflet.Map.prototype, 'setView').mockImplementation(function (this: Leaflet.Map, ...arguments_) {
+          return centrerOriginal.apply(this, arguments_)
+        })
+      })
+
+      it('place le véhicule au milieu en largeur, 20 % sous le centre : on voit la route devant', async () => {
+        const ecran = monter()
+        await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+        await recevoirPosition(ecran, 45.6, 4.95)
+        // Carte de 288 px de haut, nord en haut : le centre est 57,6 px (20 %) au nord du véhicule.
+        expect(duVehiculeAuCentre().x).toBeCloseTo(0, 1)
+        expect(duVehiculeAuCentre().y).toBeCloseTo(-57.6, 1)
+        ecran.unmount()
+      })
+
+      it('tourne la carte pour que la direction de marche soit en haut, véhicule pointé vers le haut', async () => {
+        const ecran = monter()
+        await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+        await recevoirPositionEtCap(ecran, 45.6, 4.95, 90)
+        // Cap à l'est : la carte tourne d'un quart de tour vers la gauche.
+        expect(carteAffichee!.getBearing()).toBeCloseTo(270, 5)
+        expect(repereVous().style.getPropertyValue('--direction-vous')).toBe('0deg')
+        // Le haut de l'écran est l'est : le centre est 57,6 px à l'est du véhicule, la route devant.
+        expect(duVehiculeAuCentre().x).toBeCloseTo(57.6, 1)
+        expect(duVehiculeAuCentre().y).toBeCloseTo(0, 1)
+        ecran.unmount()
+      })
+
+      it('« Garder le nord en haut » arrête de tourner ; le véhicule montre alors sa direction', async () => {
+        const ecran = monter()
+        await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+        await recevoirPositionEtCap(ecran, 45.6, 4.95, 90)
+        await boutonNomme(ecran, 'Garder le nord en haut de la carte').trigger('click')
+        expect(carteAffichee!.getBearing()).toBe(0)
+        expect(repereVous().style.getPropertyValue('--direction-vous')).toBe('90deg')
+        expect(ecran.find('#annonce-suivi').text()).toBe('Nord en haut : la carte ne tourne plus.')
+        await recevoirPositionEtCap(ecran, 45.6, 4.95, 180)
+        expect(carteAffichee!.getBearing()).toBe(0)
+        await boutonNomme(ecran, 'Tourner la carte dans le sens de la marche').trigger('click')
+        expect(carteAffichee!.getBearing()).toBeCloseTo(180, 5)
+        expect(ecran.find('#annonce-suivi').text()).toBe('La carte tourne dans le sens de la marche.')
+        ecran.unmount()
+      })
+
+      it('arrêter le suivi remet le nord en haut', async () => {
+        const ecran = monter()
+        await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+        await recevoirPositionEtCap(ecran, 45.6, 4.95, 90)
+        await boutonNomme(ecran, 'Arrêter de suivre ma position').trigger('click')
+        expect(carteAffichee!.getBearing()).toBe(0)
+        expect(boutonNomme(ecran, 'Garder le nord en haut de la carte')).toBeUndefined()
+        ecran.unmount()
+      })
+    })
+
     describe('plein écran', () => {
       const monterDansUnePage = () => {
         const autreContenu = document.createElement('p')
@@ -328,7 +415,7 @@ describe('Carte du trajet', () => {
         ecran.unmount()
       })
 
-      it('Demande #26 : la personne reste au centre quand la carte change de taille (distance restante qui apparaît)', async () => {
+      it('Demande #26 : la personne reste à sa place quand la carte change de taille (distance restante qui apparaît)', async () => {
         let surChangementDeTaille: (() => void) | null = null
         // jsdom ne joue pas les animations : on simule « réduire les animations ».
         vi.stubGlobal('matchMedia', (requete: string) => ({ matches: requete.includes('reduce') }))
@@ -354,8 +441,10 @@ describe('Carte du trajet', () => {
         // (une taille neuve à chaque appel : Leaflet modifie parfois le point reçu)
         vi.spyOn(Leaflet.Map.prototype, 'getSize').mockImplementation(() => Leaflet.point(1280, 520))
         surChangementDeTaille!()
-        expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.6, 4)
-        expect(carteAffichee!.getCenter().lng).toBeCloseTo(4.95, 4)
+        // Au milieu en largeur, et 20 % de la hauteur sous le centre : 260 + 104 px.
+        const placeDeLaPersonne = carteAffichee!.latLngToContainerPoint(Leaflet.latLng(45.6, 4.95))
+        expect(placeDeLaPersonne.x).toBeCloseTo(640, 0)
+        expect(placeDeLaPersonne.y).toBeCloseTo(364, 0)
         ecran.unmount()
       })
 
@@ -390,7 +479,13 @@ describe('Carte du trajet', () => {
     describe('Demande #26 : carte d’accueil, comme une application de navigation', () => {
       const monterAlAccueil = () =>
         mount(CarteTrajet, {
-          props: { trace: [], depart: null, arrivee: null, enLigne: true, suivreDesLOuverture: true },
+          props: {
+            trace: [],
+            depart: null,
+            arrivee: null,
+            enLigne: true,
+            suivreDesLOuverture: true,
+          },
           global: { plugins: [VueDsfr] },
           attachTo: document.body,
         })

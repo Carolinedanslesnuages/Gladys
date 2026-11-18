@@ -10,3 +10,5 @@
 | [0006](0006-carte-du-trajet.md) | Carte du trajet (Leaflet, fond Plan IGN), indisponible sans réseau | Accepted | 2026-11-18 |
 | [0007](0007-calcul-d-itineraire-openstreetmap.md) | Essai d'OpenStreetMap (Valhalla) pour le calcul d'itinéraire, au choix à côté de l'IGN | Accepted | 2026-11-18 |
 | [0008](0008-guidage-sur-la-carte.md) | Suivre sa position sur la carte pendant le trajet (sur l'appareil, sans enregistrement) | Accepted | 2026-11-18 |
+| [0011](0011-application-sans-en-tete-ni-pied-de-page.md) | Application sans en-tête ni pied de page, panneau « À propos » | Accepted | 2026-11-18 |
+| [0012](0012-carte-dans-le-sens-de-la-marche.md) | Carte dans le sens de la marche, véhicule plus bas, calcul immédiat | Accepted | 2026-11-18 |

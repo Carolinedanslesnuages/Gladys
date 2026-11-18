@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import VueDsfr from '@gouvminint/vue-dsfr'
 import App from '@/App.vue'
@@ -26,22 +26,42 @@ describe('Nom de l’application : GLADYS', () => {
   ])('l’écran %s s’appelle GLADYS et jamais l’ancien nom', async (chemin, titreAttendu) => {
     await router.push(chemin)
     await router.isReady()
-    const application = mount(App, { global: { plugins: [VueDsfr, router] }, attachTo: document.body })
+    const application = mount(App, {
+      global: { plugins: [VueDsfr, router] },
+      attachTo: document.body,
+    })
     await application.vm.$nextTick()
     expect(document.title).toBe(titreAttendu)
-    expect(application.find('header img').attributes('alt')).toBe('Gladys')
     expect(application.html()).not.toMatch(ANCIEN_NOM)
     application.unmount()
   })
 
-  it('l’en-tête montre le logo et la phrase d’accroche, sans le nom écrit en toutes lettres', async () => {
+  it('Demande #26 : application mobile, sans en-tête ni pied de page ; l’accroche est dans « À propos »', async () => {
     await router.push('/')
     await router.isReady()
-    const application = mount(App, { global: { plugins: [VueDsfr, router] }, attachTo: document.body })
+    const application = mount(App, {
+      global: { plugins: [VueDsfr, router] },
+      attachTo: document.body,
+    })
     await application.vm.$nextTick()
-    const enTete = application.find('header')
-    expect(enTete.text()).toContain('Sans permis, en toute sécurité')
-    expect(enTete.text()).not.toMatch(/gladys/i)
+    expect(application.find('header').exists()).toBe(false)
+    expect(application.find('footer').exists()).toBe(false)
+    expect(application.find('main#contenu').exists()).toBe(true)
+    await application.find('#bouton-menu').trigger('click')
+    await flushPromises()
+    expect(document.querySelector('dialog')?.textContent).toContain('Sans permis, en toute sécurité')
+    application.unmount()
+  })
+
+  it('Demande #26 : depuis « Relevés », un lien ramène à la carte', async () => {
+    await router.push('/releves')
+    await router.isReady()
+    const application = mount(App, {
+      global: { plugins: [VueDsfr, router] },
+      attachTo: document.body,
+    })
+    await application.vm.$nextTick()
+    expect(application.find('a[href="/"]').text()).toBe('Retour à la carte')
     application.unmount()
   })
 

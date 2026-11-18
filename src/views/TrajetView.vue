@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import ChampLieu from '@/components/ChampLieu.vue'
 import CarteTrajet from '@/components/CarteTrajet.vue'
+import MenuAPropos from '@/components/MenuAPropos.vue'
 import { ErreurReseau, lieuLePlusProche, type Lieu } from '@/services/adresses'
 import { PositionRefusee, positionActuelle } from '@/services/position'
 import { NOMBRE_DE_TRAJETS_GARDES, useTrajetsStore, type Trajet } from '@/stores/trajets'
@@ -105,6 +106,14 @@ onUnmounted(() => {
 
 // Un itinéraire calculé ne vaut que pour le départ et l'arrivée qui l'ont produit.
 watch([depart, arrivee], () => magasinItineraire.oublier())
+
+// Comme une application de navigation : le trajet se calcule dès que la destination est choisie
+// (ou le départ, s'il n'est pas « Ma position »), sans bouton à toucher.
+watch([arrivee, depart], ([nouvelleArrivee, nouveauDepart], [ancienneArrivee]) => {
+  if (!nouvelleArrivee || positionEnCours.value) return
+  const destinationChoisie = nouvelleArrivee !== ancienneArrivee
+  if (departDepuisMaPosition.value ? destinationChoisie : nouveauDepart) void validerTrajet()
+})
 
 const enKilometres = (metres: number) => `${(metres / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`
 
@@ -212,6 +221,7 @@ async function utiliserMaPosition(): Promise<void> {
   annonce.value = 'Départ : votre position actuelle.'
   await nextTick()
   document.getElementById('bouton-depart-ma-position')?.focus()
+  if (arrivee.value) await validerTrajet()
 }
 
 /** Toucher « Ma position » ouvre le champ « Départ » pour en choisir un autre. */
@@ -271,16 +281,17 @@ async function validerTrajet(): Promise<void> {
     trajetEnAttenteDAccord.value = { depart: depart.value, arrivee: arrivee.value }
     await nextTick()
     titreQuestionAccord.value?.focus()
-    return
+  } else {
+    magasinTrajets.retenirTrajet(depart.value, arrivee.value)
   }
-  magasinTrajets.retenirTrajet(depart.value, arrivee.value)
-  // La suite (calcul, durée, étapes) est sous la carte : on y emmène la personne.
-  await nextTick()
-  titreItineraire.value?.focus()
+  // Le calcul part tout de suite : durée et distance s'affichent sur la carte, le détail dessous.
+  await calculerMonItineraire()
 }
 
 /** Revenir sur la carte, en haut de l'écran, depuis le détail du trajet. */
 const voirLaCarte = () => document.getElementById('carte-trajet')?.focus()
+/** Depuis le résumé posé sur la carte, descendre au détail du trajet. */
+const voirLeDetailDuTrajet = () => titreItineraire.value?.focus()
 
 async function repondreAccord(choix: 'accepte' | 'refuse'): Promise<void> {
   magasinTrajets.choisirAccord(choix)
@@ -327,103 +338,138 @@ async function effacer(confirme: boolean): Promise<void> {
   <h1 class="fr-sr-only">Préparer mon trajet</h1>
 
   <div ref="ecranCarte" class="ecran-carte">
-    <!-- Avant la carte dans la page : au clavier, on arrive d'abord sur « Où allez-vous ? ». -->
-    <form
-      id="barre-destination"
-      ref="barreDestination"
-      role="search"
-      aria-label="Où allez-vous ?"
-      novalidate
-      class="barre-destination"
-      @submit.prevent="validerTrajet"
-    >
-      <ChampLieu
-        id="arrivee"
-        v-model="arrivee"
-        label="Où allez-vous ?"
-        indication="Obligatoire. Une adresse ou une commune, puis choisissez dans la liste"
-        :en-ligne="enLigne"
-        :erreur-externe="erreurArrivee"
+    <!-- Avant la carte dans la page : au clavier, on arrive d'abord sur « Où allez-vous ? », puis « Menu ». -->
+    <div class="haut-de-carte">
+      <form
+        id="barre-destination"
+        ref="barreDestination"
+        role="search"
+        aria-label="Où allez-vous ?"
+        novalidate
+        class="barre-destination"
+        @submit.prevent="validerTrajet"
       >
-        <template #sans-saisie>
-          <!-- mousedown sans effet : le focus reste dans la barre pendant qu'on touche un trajet. -->
-          <div
-            v-if="barreOuverte && accord === 'accepte' && trajetsRecents.length > 0"
-            id="trajets-sous-la-barre"
-            class="fr-mt-1w"
-            @mousedown.prevent
-          >
-            <p id="titre-trajets-sous-la-barre" class="fr-text--sm fr-text--bold fr-mb-1v">Mes trajets récents</p>
-            <ul class="fr-p-0 fr-m-0 trajets-recents" aria-labelledby="titre-trajets-sous-la-barre">
-              <li v-for="trajet in trajetsRecents" :key="trajet.valideLe">
-                <DsfrButton
-                  type="button"
-                  tertiary
-                  no-outline
-                  size="lg"
-                  icon="fr-icon-time-line"
-                  class="trajet-recent-sous-la-barre"
-                  :label="`De ${trajet.depart.libelle} à ${trajet.arrivee.libelle}`"
-                  :aria-label="`Reprendre le trajet ${descriptionTrajet(trajet.depart, trajet.arrivee)}`"
-                  @click="reprendre(trajet)"
-                />
-              </li>
-            </ul>
-          </div>
-        </template>
-      </ChampLieu>
+        <ChampLieu
+          id="arrivee"
+          v-model="arrivee"
+          label="Où allez-vous ?"
+          indication="Obligatoire. Une adresse ou une commune, puis choisissez dans la liste"
+          :en-ligne="enLigne"
+          :erreur-externe="erreurArrivee"
+        >
+          <template #sans-saisie>
+            <!-- mousedown sans effet : le focus reste dans la barre pendant qu'on touche un trajet. -->
+            <div
+              v-if="barreOuverte && accord === 'accepte' && trajetsRecents.length > 0"
+              id="trajets-sous-la-barre"
+              class="fr-mt-1w"
+              @mousedown.prevent
+            >
+              <p id="titre-trajets-sous-la-barre" class="fr-text--sm fr-text--bold fr-mb-1v">Mes trajets récents</p>
+              <ul class="fr-p-0 fr-m-0 trajets-recents" aria-labelledby="titre-trajets-sous-la-barre">
+                <li v-for="trajet in trajetsRecents" :key="trajet.valideLe">
+                  <DsfrButton
+                    type="button"
+                    tertiary
+                    no-outline
+                    size="lg"
+                    icon="fr-icon-time-line"
+                    class="trajet-recent-sous-la-barre"
+                    :label="`De ${trajet.depart.libelle} à ${trajet.arrivee.libelle}`"
+                    :aria-label="`Reprendre le trajet ${descriptionTrajet(trajet.depart, trajet.arrivee)}`"
+                    @click="reprendre(trajet)"
+                  />
+                </li>
+              </ul>
+            </div>
+          </template>
+        </ChampLieu>
 
-      <p v-if="departDepuisMaPosition" class="ligne-depart fr-mb-0">
-        <span>Départ :</span>
+        <p v-if="departDepuisMaPosition" class="ligne-depart fr-mb-0">
+          <span>Départ :</span>
+          <DsfrButton
+            id="bouton-depart-ma-position"
+            type="button"
+            tertiary
+            no-outline
+            icon="fr-icon-map-pin-2-line"
+            class="bouton-barre"
+            :label="positionEnCours ? 'Recherche de votre position…' : 'Ma position'"
+            :aria-label="positionEnCours ? 'Recherche de votre position…' : 'Départ : Ma position. Changer le départ'"
+            :disabled="positionEnCours"
+            @click="changerDeDepart"
+          />
+        </p>
+        <template v-else>
+          <ChampLieu id="depart" v-model="depart" label="Départ" :en-ligne="enLigne" :erreur-externe="erreurDepart" />
+          <DsfrButton
+            type="button"
+            tertiary
+            no-outline
+            icon="fr-icon-map-pin-2-line"
+            class="bouton-barre"
+            label="Utiliser ma position actuelle"
+            @click="utiliserMaPosition"
+          />
+        </template>
         <DsfrButton
-          id="bouton-depart-ma-position"
-          type="button"
-          tertiary
-          no-outline
-          icon="fr-icon-map-pin-2-line"
-          class="bouton-barre"
-          :label="positionEnCours ? 'Recherche de votre position…' : 'Ma position'"
-          :aria-label="positionEnCours ? 'Recherche de votre position…' : 'Départ : Ma position. Changer le départ'"
+          v-if="arrivee && !resultat && !calculEnCours"
+          type="submit"
+          size="lg"
+          class="fr-mt-1w"
+          label="Valider mon trajet"
+          icon="fr-icon-check-line"
           :disabled="positionEnCours"
-          @click="changerDeDepart"
         />
-      </p>
-      <template v-else>
-        <ChampLieu id="depart" v-model="depart" label="Départ" :en-ligne="enLigne" :erreur-externe="erreurDepart" />
-        <DsfrButton
-          type="button"
-          tertiary
-          no-outline
-          icon="fr-icon-map-pin-2-line"
-          class="bouton-barre"
-          label="Utiliser ma position actuelle"
-          @click="utiliserMaPosition"
+        <DsfrAlert
+          v-if="!enLigne"
+          type="info"
+          small
+          class="fr-mt-1w"
+          description="Sans réseau, la recherche d’adresse et la position actuelle sont indisponibles. Vos trajets récents restent utilisables."
         />
-      </template>
-      <DsfrButton
-        v-if="arrivee"
-        type="submit"
-        size="lg"
-        class="fr-mt-1w"
-        label="Valider mon trajet"
-        icon="fr-icon-check-line"
-        :disabled="positionEnCours"
-      />
-      <DsfrAlert
-        v-if="!enLigne"
-        type="info"
-        small
-        class="fr-mt-1w"
-        description="Sans réseau, la recherche d’adresse et la position actuelle sont indisponibles. Vos trajets récents restent utilisables."
-      />
-    </form>
+      </form>
+      <div class="fond-du-menu">
+        <MenuAPropos />
+      </div>
+    </div>
     <CarteTrajet
       :trace="traceSurLaCarte"
       :depart="depart"
       :arrivee="arrivee"
       :en-ligne="enLigne"
       suivre-des-l-ouverture
-    />
+    >
+      <!-- Durée et distance sur la carte, sans faire défiler ; les annonces vocales sont plus bas. -->
+      <template #sur-la-carte>
+        <div
+          v-if="depart && arrivee && (calculEnCours || resultat || erreurItineraire)"
+          id="resume-trajet"
+          class="panneau-resume"
+        >
+          <p v-if="calculEnCours" class="fr-mb-0">Calcul de votre itinéraire…</p>
+          <template v-else>
+            <DsfrAlert v-if="erreurItineraire" type="error" small :description="erreurItineraire" class="fr-mb-1w" />
+            <p v-else-if="resultat" class="fr-mb-1w">
+              <strong class="fr-text--lg">{{ horairesEstimes?.duree ?? '' }}</strong>
+              <span v-if="horairesEstimes"> · </span>{{ enKilometres(resultat.itineraire.distanceMetres) }}
+              <span v-if="horairesEstimes" class="fr-text--sm fr-mb-0 ligne-arrivee">
+                Arrivée vers {{ horairesEstimes.arrivee }}
+              </span>
+            </p>
+            <DsfrButton
+              type="button"
+              secondary
+              size="sm"
+              icon="fr-icon-arrow-down-line"
+              class="bouton-barre"
+              label="Voir le détail du trajet"
+              @click="voirLeDetailDuTrajet"
+            />
+          </template>
+        </div>
+      </template>
+    </CarteTrajet>
   </div>
 
   <div class="fr-container fr-my-6w">
@@ -670,14 +716,40 @@ async function effacer(confirme: boolean): Promise<void> {
   height: calc(100dvh - var(--haut-ecran-carte, 0px));
   min-height: 20rem;
 }
-.barre-destination {
+/* Posé en haut de la carte : la barre à gauche, « Menu » à droite ; la carte reste touchable entre les deux. */
+.haut-de-carte {
   position: absolute;
-  top: 0.5rem;
-  left: 0.5rem;
-  right: 0.5rem;
+  inset: 0.5rem 0.5rem auto;
   z-index: 1100;
-  max-width: 36rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   max-height: calc(100% - 1rem);
+  pointer-events: none;
+}
+.haut-de-carte > * {
+  pointer-events: auto;
+}
+.fond-du-menu {
+  flex: none;
+  margin-left: auto;
+  background: var(--background-default-grey);
+  box-shadow: 0 2px 8px rgb(0 0 18 / 20%);
+}
+.panneau-resume {
+  padding: 0.5rem 0.75rem;
+  background: var(--background-default-grey);
+  box-shadow: 0 2px 6px rgb(0 0 18 / 16%);
+}
+.ligne-arrivee {
+  display: block;
+}
+.barre-destination {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 36rem;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - var(--haut-ecran-carte, 0px) - 1rem);
   overflow-y: auto;
   padding: 0.75rem 1rem;
   background: var(--background-default-grey);

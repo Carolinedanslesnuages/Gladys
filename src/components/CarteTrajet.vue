@@ -11,9 +11,13 @@
  * Carte d'accueil, comme une application de navigation : elle remplit la place que lui donne
  * l'écran, ses boutons sont posés dessus, et elle peut exister sans trajet (France entière, puis
  * la personne si elle autorise sa position). Décision : docs/adr/0010-accueil-carte-plein-ecran.md.
+ * Pendant le suivi, le véhicule est placé plus bas que le centre (on voit la route devant) et la carte
+ * tourne dans le sens de la marche, sauf si la personne garde le nord en haut.
+ * Décision : docs/adr/0012-carte-dans-le-sens-de-la-marche.md.
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import Leaflet from 'leaflet'
+import 'leaflet-rotate'
 import 'leaflet/dist/leaflet.css'
 import type { Lieu } from '@/services/adresses'
 import type { PointDuTrace } from '@/services/itineraire'
@@ -89,6 +93,11 @@ function creerCarte(conteneur: HTMLElement): void {
     fadeAnimation: !sansAnimation,
     markerZoomAnimation: !sansAnimation,
     inertia: !sansAnimation,
+    // La carte peut tourner, mais seulement par GLADYS (sens de la marche) : pas de geste caché.
+    rotate: true,
+    rotateControl: false,
+    touchRotate: false,
+    shiftKeyRotate: false,
   })
   Leaflet.control.attribution({ prefix: false }).addAttribution(MENTION_OPENSTREETMAP).addTo(carte)
   Leaflet.tileLayer(FOND_OPENSTREETMAP, { minZoom: 6, maxZoom: 19, tileSize: 256 }).addTo(carte)
@@ -109,6 +118,8 @@ function creerCarte(conteneur: HTMLElement): void {
     })
     observateurDeTaille.observe(conteneur)
   }
+  // Le véhicule reste tourné dans le bon sens à l'écran quand la carte tourne.
+  carte.on('rotate', orienterLaFleche)
   if (props.suivreDesLOuverture && !suiviActif.value) demarrerLeSuivi({ automatique: true })
 }
 
@@ -135,6 +146,8 @@ function dessinerLeTrajet(): void {
     interactive: false,
     keyboard: false,
   }).addTo(coucheDuTrajet)
+  // Le trajet en entier se lit nord en haut, comme sur une carte papier.
+  carte.setBearing(0)
   carte.fitBounds(ligneDuTrajet.getBounds(), { padding: [24, 24], animate: false })
 }
 
@@ -207,11 +220,51 @@ function directionDeMarche(positionPrecedente: Coordonnees | null, nouvellePosit
   return directionDeLaPersonne
 }
 
+/** Le véhicule pointe dans le sens de la marche à l'écran : sa direction, plus la rotation de la carte. */
 function orienterLaFleche(): void {
   const repereAffiche = repereDeLaPersonne?.getElement()?.querySelector<HTMLElement>('.repere-vous')
-  if (!repereAffiche) return
+  if (!repereAffiche || !carte) return
   repereAffiche.classList.toggle('repere-vous--sans-direction', directionDeLaPersonne === null)
-  repereAffiche.style.setProperty('--direction-vous', `${directionDeLaPersonne ?? 0}deg`)
+  const directionALEcran = ((directionDeLaPersonne ?? 0) + carte.getBearing()) % 360
+  repereAffiche.style.setProperty('--direction-vous', `${directionALEcran}deg`)
+}
+
+/** Carte dans le sens de la marche (choix par défaut) ou nord en haut. */
+const sensDeLaMarche = ref(true)
+
+/** Tant qu'elle suit la personne, la carte tourne pour que la route devant soit en haut de l'écran. */
+function orienterLaCarte(): void {
+  if (!carte || !carteCentreeSurLaPersonne.value) return
+  if (!sensDeLaMarche.value) carte.setBearing(0)
+  else if (directionDeLaPersonne !== null) carte.setBearing(360 - directionDeLaPersonne)
+}
+
+function basculerLeSensDeLaCarte(): void {
+  sensDeLaMarche.value = !sensDeLaMarche.value
+  if (!sensDeLaMarche.value) carte?.setBearing(0)
+  else orienterLaCarte()
+  garderLaPersonneAuCentre()
+  messageDuSuivi.value = sensDeLaMarche.value
+    ? 'La carte tourne dans le sens de la marche.'
+    : 'Nord en haut : la carte ne tourne plus.'
+}
+
+/** Part de la hauteur de la carte entre le centre et le véhicule : on voit plus de route devant. */
+const PART_DE_LA_HAUTEUR_SOUS_LE_CENTRE = 0.2
+
+/**
+ * Centre de la carte qui place la personne plus bas que le milieu de l'écran, même carte tournée :
+ * le décalage « vers le haut de l'écran » est ramené dans le sens de la carte.
+ */
+function centreQuiMontreLaRouteDevant(point: Leaflet.LatLng, zoom: number): Leaflet.LatLng {
+  if (!carte) return point
+  const decalagePixels = carte.getSize().y * PART_DE_LA_HAUTEUR_SOUS_LE_CENTRE
+  const rotationRadians = (carte.getBearing() * Math.PI) / 180
+  const versLeHautDeLEcran = Leaflet.point(
+    -decalagePixels * Math.sin(rotationRadians),
+    -decalagePixels * Math.cos(rotationRadians),
+  )
+  return carte.unproject(carte.project(point, zoom).add(versLeHautDeLEcran), zoom)
 }
 
 function placerLaPersonne(coordonnees: Coordonnees): void {
@@ -229,23 +282,25 @@ function placerLaPersonne(coordonnees: Coordonnees): void {
       keyboard: false,
       zIndexOffset: 1000,
     }).addTo(carte)
-  orienterLaFleche()
   if (premierePosition) {
     carteCentreeSurLaPersonne.value = true
     messageDuSuivi.value = 'Position trouvée : la carte vous suit.'
   }
-  if (carteCentreeSurLaPersonne.value)
-    carte.setView(point, premierePosition ? ZOOM_DU_SUIVI : carte.getZoom(), {
+  orienterLaCarte()
+  orienterLaFleche()
+  if (carteCentreeSurLaPersonne.value) {
+    const zoom = premierePosition ? ZOOM_DU_SUIVI : carte.getZoom()
+    carte.setView(centreQuiMontreLaRouteDevant(point, zoom), zoom, {
       animate: !animationsReduites(),
     })
+  }
 }
 
-/** Après un changement de taille de la carte, la personne suivie reste au centre, sans animation. */
+/** Après un changement de taille de la carte, la personne suivie reste à sa place, sans animation. */
 function garderLaPersonneAuCentre(): void {
   if (!carte || !suiviActif.value || !carteCentreeSurLaPersonne.value || !positionSuivie.value) return
-  carte.panTo(Leaflet.latLng(positionSuivie.value.latitude, positionSuivie.value.longitude), {
-    animate: false,
-  })
+  const point = Leaflet.latLng(positionSuivie.value.latitude, positionSuivie.value.longitude)
+  carte.panTo(centreQuiMontreLaRouteDevant(point, carte.getZoom()), { animate: false })
 }
 
 function detacherLaCarte(): void {
@@ -262,10 +317,13 @@ function recentrerSurLaPersonne(): void {
   }
   carteCentreeSurLaPersonne.value = true
   messageDuSuivi.value = 'Carte recentrée : la carte vous suit.'
-  if (carte && positionSuivie.value)
-    carte.setView(Leaflet.latLng(positionSuivie.value.latitude, positionSuivie.value.longitude), ZOOM_DU_SUIVI, {
+  orienterLaCarte()
+  if (carte && positionSuivie.value) {
+    const point = Leaflet.latLng(positionSuivie.value.latitude, positionSuivie.value.longitude)
+    carte.setView(centreQuiMontreLaRouteDevant(point, ZOOM_DU_SUIVI), ZOOM_DU_SUIVI, {
       animate: !animationsReduites(),
     })
+  }
 }
 
 function signalerErreurDuSuivi(erreur: Error, automatique: boolean): void {
@@ -295,6 +353,7 @@ function arreterLeSuivi(): void {
   repereDeLaPersonne?.remove()
   repereDeLaPersonne = null
   directionDeLaPersonne = null
+  carte?.setBearing(0)
   if (suiviActif.value) messageDuSuivi.value = 'La carte ne suit plus votre position.'
   suiviActif.value = false
   positionSuivie.value = null
@@ -380,7 +439,8 @@ const nomDeLaCarte = () =>
     >
       <p id="aide-carte" class="fr-sr-only">
         Déplacez la carte avec le doigt ou les flèches du clavier. Zoomez avec les boutons, ou les touches + et −. Votre
-        position reste sur ce téléphone. Gardez les yeux sur la route : regardez la carte seulement à l’arrêt.
+        position reste sur ce téléphone. Quand elle vous suit, la carte tourne dans le sens de la marche, sauf si vous
+        gardez le nord en haut. Gardez les yeux sur la route : regardez la carte seulement à l’arrêt.
         <template v-if="pleinEcran">Touche Échap pour quitter le plein écran.</template>
       </p>
       <div
@@ -393,7 +453,9 @@ const nomDeLaCarte = () =>
       ></div>
       <p id="annonce-suivi" role="status" class="fr-sr-only">{{ messageDuSuivi }}</p>
       <!-- Posés sur la carte : la distance restante en bas, les boutons à droite. -->
-      <div v-if="erreurDuSuivi || avancement" class="infos-carte">
+      <div v-if="erreurDuSuivi || avancement || $slots['sur-la-carte']" class="infos-carte">
+        <!-- Ce que l'écran pose sur la carte (ex. : durée et distance du trajet). -->
+        <slot name="sur-la-carte" />
         <DsfrAlert v-if="erreurDuSuivi" type="error" small :description="erreurDuSuivi" />
         <div v-if="avancement" id="avancement-trajet" class="panneau-avancement">
           <p class="fr-text--lg fr-mb-0">
@@ -430,6 +492,19 @@ const nomDeLaCarte = () =>
           :label="suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'"
           :aria-label="suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'"
           @click="basculerLeSuivi"
+        />
+        <DsfrButton
+          v-if="suiviActif"
+          type="button"
+          secondary
+          size="lg"
+          icon-only
+          icon="fr-icon-compass-3-line"
+          :label="sensDeLaMarche ? 'Garder le nord en haut de la carte' : 'Tourner la carte dans le sens de la marche'"
+          :aria-label="
+            sensDeLaMarche ? 'Garder le nord en haut de la carte' : 'Tourner la carte dans le sens de la marche'
+          "
+          @click="basculerLeSensDeLaCarte"
         />
         <DsfrButton
           type="button"
