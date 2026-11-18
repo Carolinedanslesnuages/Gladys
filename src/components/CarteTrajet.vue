@@ -488,7 +488,7 @@ const nomDeLaCarte = () =>
       <!-- Posés sur la carte : la distance restante en bas, les boutons à droite. -->
       <div v-if="erreurDuSuivi || avancement || $slots['sur-la-carte']" class="infos-carte">
         <!-- Ce que l'écran pose sur la carte (ex. : durée et distance du trajet). -->
-        <slot name="sur-la-carte" />
+        <slot name="sur-la-carte" :distance-restante-affichee="Boolean(avancement)" />
         <DsfrAlert v-if="erreurDuSuivi" type="error" small :description="erreurDuSuivi" />
         <!-- Discret, à droite : seule la distance restante se voit (ex. : « 22 km »). -->
         <div v-if="avancement" id="avancement-trajet" class="avancement">
@@ -636,8 +636,15 @@ const nomDeLaCarte = () =>
   bottom: 1.75rem;
   z-index: 1000;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-end;
   gap: 0.5rem;
+}
+/* Côte à côte à droite (ex. : « 45 min » puis « 22 km ») ; une alerte prend toute la largeur. */
+.infos-carte > .fr-alert,
+.avancement:has(.fr-alert) {
+  flex-basis: 100%;
 }
 .avancement {
   display: flex;

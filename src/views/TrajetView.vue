@@ -500,36 +500,46 @@ async function effacer(confirme: boolean): Promise<void> {
       suivre-des-l-ouverture
     >
       <!-- Durée et distance sur la carte, sans faire défiler ; les annonces vocales sont plus bas. -->
-      <template #sur-la-carte>
+      <!-- Discret, à droite, à côté de la distance restante : seule la durée se voit (ex. : « 45 min »). -->
+      <template #sur-la-carte="{ distanceRestanteAffichee }">
         <div
           v-if="depart && arrivee && (calculEnCours || resultat || erreurItineraire)"
           id="resume-trajet"
           class="panneau-resume"
+          :class="{ 'panneau-resume--large': calculEnCours || erreurItineraire }"
         >
           <p v-if="calculEnCours" class="fr-mb-0">Calcul de votre itinéraire…</p>
-          <template v-else>
-            <DsfrAlert
-              v-if="erreurItineraire"
-              type="error"
-              small
-              :description="erreurItineraire"
-              class="fr-mb-1w"
-            />
-            <p v-else-if="resultat" class="fr-mb-1w">
-              <strong class="fr-text--lg">{{ horairesEstimes?.duree ?? '' }}</strong>
-              <span v-if="horairesEstimes"> · </span
-              >{{ enKilometres(resultat.itineraire.distanceMetres) }}
-              <span v-if="horairesEstimes" class="fr-text--sm fr-mb-0 ligne-arrivee">
-                Arrivée vers {{ horairesEstimes.arrivee }}
-              </span>
+          <DsfrAlert
+            v-else-if="erreurItineraire"
+            type="error"
+            small
+            :description="erreurItineraire"
+          />
+          <template v-else-if="resultat">
+            <p class="fr-text--lg fr-mb-0">
+              <strong>{{ horairesEstimes?.duree ?? '' }}</strong>
+              <!-- La distance totale se voit tant que la distance restante n'est pas affichée à côté. -->
+              <span v-if="!distanceRestanteAffichee"
+                ><template v-if="horairesEstimes"> · </template
+                >{{ enKilometres(resultat.itineraire.distanceMetres) }}</span
+              >
+              <span v-else class="fr-sr-only"
+                >, {{ enKilometres(resultat.itineraire.distanceMetres) }} au total</span
+              >
+              <span v-if="horairesEstimes" class="fr-sr-only"
+                >. Arrivée vers {{ horairesEstimes.arrivee }}.</span
+              >
             </p>
             <DsfrButton
               type="button"
-              secondary
+              tertiary
+              no-outline
               size="sm"
+              icon-only
               icon="fr-icon-arrow-down-line"
               class="bouton-barre"
               label="Voir le détail du trajet"
+              aria-label="Voir le détail du trajet"
               @click="voirLeDetailDuTrajet"
             />
           </template>
@@ -842,12 +852,17 @@ async function effacer(confirme: boolean): Promise<void> {
   box-shadow: 0 2px 8px rgb(0 0 18 / 20%);
 }
 .panneau-resume {
-  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
   background: var(--background-default-grey);
   box-shadow: 0 2px 6px rgb(0 0 18 / 16%);
 }
-.ligne-arrivee {
-  display: block;
+/* Le calcul en cours et les erreurs gardent toute la largeur, pour rester lisibles. */
+.panneau-resume--large {
+  flex-basis: 100%;
+  padding: 0.5rem 0.75rem;
 }
 .barre-destination {
   flex: 1 1 auto;

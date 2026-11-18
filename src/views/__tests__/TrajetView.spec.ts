@@ -532,6 +532,9 @@ describe('Écran « Préparer mon trajet »', () => {
       expect(resume.text()).toContain('32 min')
       expect(resume.text()).toContain('21 km')
       expect(resume.text()).toContain('Arrivée vers')
+      // Demande #30 : sur la carte, seuls la durée et les kilomètres se voient, l'heure d'arrivée est lue.
+      expect(resume.find('strong').text()).toBe('32 min')
+      expect(resume.find('.fr-sr-only').text()).toMatch(/^\. Arrivée vers \d{1,2} h \d{2}\.$/)
       expect(ecran.text()).not.toContain('Valider mon trajet')
       await boutonNomme(ecran, 'Voir le détail du trajet').trigger('click')
       expect(document.activeElement?.id).toBe('titre-itineraire')
