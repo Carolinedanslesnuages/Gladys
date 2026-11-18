@@ -50,6 +50,14 @@ export const useItineraireStore = defineStore('itineraire', () => {
     }
   }
 
+  /** Remet un itinéraire déjà calculé (un trajet favori) : aucun réseau nécessaire. */
+  function restaurer(resultatEnregistre: ResultatItineraire, calculateurEnregistre: Calculateur | null): void {
+    resultat.value = resultatEnregistre
+    calculateurDuResultat.value = calculateurEnregistre
+    calculEnCours.value = false
+    erreur.value = null
+  }
+
   function oublier(): void {
     resultat.value = null
     erreur.value = null
@@ -65,6 +73,7 @@ export const useItineraireStore = defineStore('itineraire', () => {
     choisirSeuil,
     choisirCalculateur,
     calculer,
+    restaurer,
     oublier,
   }
 })

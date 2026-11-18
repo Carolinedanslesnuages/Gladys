@@ -173,6 +173,18 @@ describe('Carte du trajet', () => {
     ecran.unmount()
   })
 
+  it('Story #6 : trajet favori sans réseau, garde la carte et dit que les zones jamais vues restent vides', async () => {
+    const ecran = mount(CarteTrajet, {
+      props: { trace, depart: lyon, arrivee: vienne, enLigne: false, carteHorsConnexion: true },
+      global: { plugins: [VueDsfr] },
+      attachTo: document.body,
+    })
+    expect(ecran.find('#carte-trajet path').exists()).toBe(true)
+    expect(ecran.find('#etat-carte').attributes('role')).toBe('status')
+    expect(ecran.find('#etat-carte').text()).toContain('Les zones jamais regardées restent vides')
+    ecran.unmount()
+  })
+
   it('affiche la carte au retour du réseau', async () => {
     const ecran = monter(false)
     await ecran.setProps({ enLigne: true })

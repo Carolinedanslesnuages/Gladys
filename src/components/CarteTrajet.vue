@@ -30,6 +30,8 @@ const props = defineProps<{
   depart: Lieu | null
   arrivee: Lieu | null
   enLigne: boolean
+  /** Trajet favori rouvert : sans réseau, la carte reste affichée avec les morceaux déjà vus (ADR 0013). */
+  carteHorsConnexion?: boolean
   /** Carte d'accueil : chercher la personne dès l'ouverture, sans alerte si elle refuse. */
   suivreDesLOuverture?: boolean
 }>()
@@ -38,6 +40,7 @@ const props = defineProps<{
 const CENTRE_DE_LA_FRANCE = Leaflet.latLng(46.6, 2.4)
 const ZOOM_DE_LA_FRANCE = 6
 const aUnTrajet = computed(() => props.trace.length >= 2)
+const carteAffichee = computed(() => props.enLigne || Boolean(props.carteHorsConnexion))
 
 /** Tuiles OpenStreetMap (serveur de la fondation, sans compte) : seule la zone affichée est demandée. */
 const FOND_OPENSTREETMAP = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
@@ -453,14 +456,20 @@ const nomDeLaCarte = () =>
   <div class="carte-complete">
     <div id="etat-carte" role="status" class="etat-carte">
       <DsfrAlert
-        v-if="!enLigne"
+        v-if="!enLigne && carteHorsConnexion"
+        type="info"
+        small
+        description="Hors connexion : seuls les morceaux de carte déjà vus s’affichent. Les zones jamais regardées restent vides. Les étapes de votre trajet restent lisibles plus bas."
+      />
+      <DsfrAlert
+        v-else-if="!enLigne"
         type="info"
         small
         description="Carte indisponible sans connexion. Les étapes de votre trajet restent lisibles plus bas."
       />
     </div>
     <div
-      v-if="enLigne"
+      v-if="carteAffichee"
       id="zone-carte"
       ref="zoneCarte"
       class="zone-carte"

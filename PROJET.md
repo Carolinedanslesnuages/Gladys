@@ -17,3 +17,4 @@
 - #5 Voir et comparer le trajet avant de partir — [fiche](revues/story-5-voir-et-comparer-le-trajet-avant-de-part.md)
 - #11 Changer le nom — [fiche](revues/story-11-changer-le-nom.md)
 - #16 Voir l'itinéraire sur une carte (mode libre) — [fiche](revues/libre-16-je-veux-voir-l-itineraire.md)
+- #6 Garder mon trajet hors connexion — [fiche](revues/story-6-garder-mon-trajet-hors-connexion.md)

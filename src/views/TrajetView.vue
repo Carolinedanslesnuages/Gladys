@@ -8,6 +8,7 @@ import { ErreurReseau, lieuLePlusProche, type Lieu } from '@/services/adresses'
 import { PositionRefusee, positionActuelle } from '@/services/position'
 import { NOMBRE_DE_TRAJETS_GARDES, useTrajetsStore, type Trajet } from '@/stores/trajets'
 import { SEUILS_DE_DETOUR, useItineraireStore } from '@/stores/itineraire'
+import { LONGUEUR_MAXIMALE_DU_NOM, useFavorisStore, type Favori } from '@/stores/favoris'
 import { useDureeStore } from '@/stores/duree'
 import {
   VITESSE_MAXIMALE_KMH,
@@ -105,12 +106,31 @@ onUnmounted(() => {
   window.removeEventListener('resize', ajusterLaHauteurDeLaCarte)
 })
 
+// Trajets favoris : enregistrés avec leur itinéraire, ils se rouvrent sans réseau (ADR 0013).
+const magasinFavoris = useFavorisStore()
+const { accord: accordFavoris, favoris, erreur: erreurFavoris } = storeToRefs(magasinFavoris)
+/** Vrai pendant l'ouverture d'un favori : son itinéraire est déjà là, il ne faut ni l'oublier ni le recalculer. */
+const ouvertureDeFavoriEnCours = ref(false)
+/** Vrai tant que l'itinéraire affiché vient d'un favori : la carte reste affichée sans réseau. */
+const favoriOuvert = ref(false)
+const enregistrementOuvert = ref(false)
+const nomDuFavori = ref('')
+const erreurNomDuFavori = ref('')
+const favoriASupprimer = ref<Favori | null>(null)
+const titreEnregistrement = ref<HTMLElement | null>(null)
+const titreFavoris = ref<HTMLElement | null>(null)
+
 // Un itinéraire calculé ne vaut que pour le départ et l'arrivée qui l'ont produit.
-watch([depart, arrivee], () => magasinItineraire.oublier())
+watch([depart, arrivee], () => {
+  if (ouvertureDeFavoriEnCours.value) return
+  favoriOuvert.value = false
+  magasinItineraire.oublier()
+})
 
 // Comme une application de navigation : le trajet se calcule dès que la destination est choisie
 // (ou le départ, s'il n'est pas « Ma position »), sans bouton à toucher.
 watch([arrivee, depart], ([nouvelleArrivee, nouveauDepart], [ancienneArrivee]) => {
+  if (ouvertureDeFavoriEnCours.value) return
   if (!nouvelleArrivee || positionEnCours.value) return
   const destinationChoisie = nouvelleArrivee !== ancienneArrivee
   if (departDepuisMaPosition.value ? destinationChoisie : nouveauDepart) void validerTrajet()
@@ -344,6 +364,93 @@ async function repondreAccord(choix: 'accepte' | 'refuse'): Promise<void> {
   titreTrajetsRecents.value?.focus()
 }
 
+/** « Enregistrer ce trajet » : demande l'accord (une fois), puis le nom. */
+async function ouvrirEnregistrement(): Promise<void> {
+  enregistrementOuvert.value = true
+  erreurNomDuFavori.value = ''
+  detailAffiche.value = true
+  await nextTick()
+  titreEnregistrement.value?.focus()
+}
+
+async function repondreAccordFavoris(choix: 'accepte' | 'refuse'): Promise<void> {
+  magasinFavoris.choisirAccord(choix)
+  if (choix === 'refuse') {
+    enregistrementOuvert.value = false
+    annonce.value = 'Aucun trajet ne sera enregistré sur ce téléphone.'
+    return
+  }
+  annonce.value = 'Vos trajets favoris seront gardés sur ce téléphone.'
+  await nextTick()
+  document.getElementById('nom-du-favori')?.focus()
+}
+
+async function enregistrerLeTrajet(): Promise<void> {
+  if (!depart.value || !arrivee.value || !resultat.value) return
+  const nomEnregistre = nomDuFavori.value.trim()
+  const probleme = magasinFavoris.enregistrer(
+    nomDuFavori.value,
+    depart.value,
+    arrivee.value,
+    resultat.value,
+    calculateurDuResultat.value,
+  )
+  erreurNomDuFavori.value = probleme ?? ''
+  if (probleme) {
+    await nextTick()
+    document.getElementById('nom-du-favori')?.focus()
+    return
+  }
+  enregistrementOuvert.value = false
+  nomDuFavori.value = ''
+  annonce.value = `Trajet « ${nomEnregistre} » enregistré. Il s’ouvrira même sans réseau.`
+  await nextTick()
+  titreFavoris.value?.focus()
+}
+
+function annulerEnregistrement(): void {
+  enregistrementOuvert.value = false
+  nomDuFavori.value = ''
+  erreurNomDuFavori.value = ''
+  document.getElementById('bouton-enregistrer-trajet')?.focus()
+}
+
+/** Rouvre un favori avec son tracé et ses étapes enregistrés : aucun réseau nécessaire. */
+async function ouvrirFavori(favori: Favori): Promise<void> {
+  ouvertureDeFavoriEnCours.value = true
+  departDepuisMaPosition.value = false
+  barreOuverte.value = false
+  barreDeplieeALaMain.value = false
+  depart.value = favori.depart
+  arrivee.value = favori.arrivee
+  erreurDepart.value = ''
+  erreurArrivee.value = ''
+  magasinItineraire.restaurer(favori.resultat, favori.calculateur)
+  favoriOuvert.value = true
+  // Les observateurs de départ et d'arrivée passent au prochain cycle : le drapeau reste levé jusque-là.
+  await nextTick()
+  ouvertureDeFavoriEnCours.value = false
+  annonce.value = `Trajet favori ouvert : ${favori.nom}, ${descriptionTrajet(favori.depart, favori.arrivee)}.${enLigne.value ? '' : ' Sans réseau, seuls les morceaux de carte déjà vus s’affichent.'}`
+  document.getElementById('carte-trajet')?.focus()
+}
+
+async function demanderSuppression(favori: Favori): Promise<void> {
+  favoriASupprimer.value = favori
+  await nextTick()
+  document.getElementById('question-suppression')?.focus()
+}
+
+async function supprimerLeFavori(confirme: boolean): Promise<void> {
+  const favori = favoriASupprimer.value
+  favoriASupprimer.value = null
+  if (favori && confirme) {
+    magasinFavoris.supprimer(favori.id)
+    annonce.value = `Trajet « ${favori.nom} » supprimé de ce téléphone.`
+  }
+  await nextTick()
+  titreFavoris.value?.focus()
+}
+
 function reprendre(trajet: Trajet): void {
   departDepuisMaPosition.value = false
   barreOuverte.value = false
@@ -503,6 +610,7 @@ async function effacer(confirme: boolean): Promise<void> {
       :depart="depart"
       :arrivee="arrivee"
       :en-ligne="enLigne"
+      :carte-hors-connexion="favoriOuvert"
       suivre-des-l-ouverture
     >
       <!-- Durée et distance sur la carte, sans faire défiler ; les annonces vocales sont plus bas. -->
@@ -571,7 +679,7 @@ async function effacer(confirme: boolean): Promise<void> {
           : 'Afficher le détail et mes trajets récents'
       "
       :aria-expanded="detailAffiche ? 'true' : 'false'"
-      aria-controls="detail-du-trajet mes-trajets-recents"
+      aria-controls="detail-du-trajet mes-trajets-favoris mes-trajets-recents"
       @click="basculerLeDetail"
     />
     <!-- Plus de menu sur la carte : « À propos » (accessibilité, mentions légales, relevés) reste ici. -->
@@ -752,6 +860,68 @@ async function effacer(confirme: boolean): Promise<void> {
             </li>
           </ol>
         </template>
+
+        <template v-if="resultat">
+          <h3 id="titre-enregistrement" ref="titreEnregistrement" tabindex="-1" class="fr-h6 fr-mt-3w">
+            Garder ce trajet hors connexion
+          </h3>
+          <DsfrButton
+            v-if="!enregistrementOuvert"
+            id="bouton-enregistrer-trajet"
+            type="button"
+            secondary
+            size="lg"
+            icon="fr-icon-save-line"
+            label="Enregistrer ce trajet"
+            @click="ouvrirEnregistrement"
+          />
+          <div v-else-if="accordFavoris !== 'accepte'" class="fr-p-3w question-accord">
+            <p class="fr-text--bold">Garder mes trajets favoris sur ce téléphone ?</p>
+            <p>
+              Un favori peut contenir l’adresse de votre domicile. Il reste sur ce téléphone, ne
+              part nulle part, et vous le rouvrez même sans réseau. Vous pouvez le supprimer à tout
+              moment.
+            </p>
+            <div class="fr-btns-group fr-btns-group--inline-sm">
+              <DsfrButton
+                type="button"
+                size="lg"
+                label="Oui, garder mes favoris"
+                @click="repondreAccordFavoris('accepte')"
+              />
+              <DsfrButton
+                type="button"
+                size="lg"
+                secondary
+                label="Non, ne rien enregistrer"
+                @click="repondreAccordFavoris('refuse')"
+              />
+            </div>
+          </div>
+          <form v-else id="formulaire-favori" novalidate @submit.prevent="enregistrerLeTrajet">
+            <DsfrInputGroup
+              id="nom-du-favori"
+              v-model="nomDuFavori"
+              label="Nom du trajet (obligatoire)"
+              label-visible
+              :hint="`Par exemple : Maison → Marché. ${LONGUEUR_MAXIMALE_DU_NOM} caractères au plus.`"
+              :error-message="erreurNomDuFavori || undefined"
+              type="text"
+              autocomplete="off"
+              required
+            />
+            <div class="fr-btns-group fr-btns-group--inline-sm">
+              <DsfrButton type="submit" size="lg" label="Enregistrer ce trajet sous ce nom" />
+              <DsfrButton
+                type="button"
+                size="lg"
+                secondary
+                label="Annuler"
+                @click="annulerEnregistrement"
+              />
+            </div>
+          </form>
+        </template>
       </section>
     </div>
     <DsfrAlert
@@ -761,6 +931,70 @@ async function effacer(confirme: boolean): Promise<void> {
       :description="erreurEnregistrement"
       class="fr-mb-2w"
     />
+
+    <DsfrAlert
+      v-if="erreurFavoris"
+      type="error"
+      small
+      :description="erreurFavoris"
+      class="fr-mb-2w"
+    />
+
+    <div v-show="detailAffiche" id="mes-trajets-favoris" class="fr-mb-4w">
+      <h2 id="titre-trajets-favoris" ref="titreFavoris" tabindex="-1" class="fr-h5">
+        Mes trajets favoris
+      </h2>
+      <p v-if="favoris.length === 0">
+        Aucun trajet favori pour l’instant. Préparez un trajet, puis choisissez « Enregistrer ce
+        trajet » dans son détail.
+      </p>
+      <ul v-else class="fr-p-0 trajets-recents" aria-labelledby="titre-trajets-favoris">
+        <li v-for="favori in favoris" :key="favori.id" class="fr-mb-2w">
+          <div v-if="favoriASupprimer?.id === favori.id">
+            <p id="question-suppression" tabindex="-1">
+              Supprimer le trajet « {{ favori.nom }} » de ce téléphone ?
+            </p>
+            <div class="fr-btns-group fr-btns-group--inline-sm">
+              <DsfrButton
+                type="button"
+                size="lg"
+                :label="`Oui, supprimer le trajet ${favori.nom}`"
+                @click="supprimerLeFavori(true)"
+              />
+              <DsfrButton
+                type="button"
+                size="lg"
+                secondary
+                label="Annuler"
+                :aria-label="`Annuler : garder le trajet ${favori.nom}`"
+                @click="supprimerLeFavori(false)"
+              />
+            </div>
+          </div>
+          <div v-else class="fr-btns-group fr-btns-group--inline-sm">
+            <DsfrButton
+              type="button"
+              tertiary
+              size="lg"
+              icon="fr-icon-star-line"
+              class="trajet-recent"
+              :label="favori.nom"
+              :aria-label="`Ouvrir le trajet favori ${favori.nom}`"
+              @click="ouvrirFavori(favori)"
+            />
+            <DsfrButton
+              type="button"
+              tertiary
+              size="lg"
+              icon="fr-icon-delete-line"
+              label="Supprimer"
+              :aria-label="`Supprimer le trajet ${favori.nom}`"
+              @click="demanderSuppression(favori)"
+            />
+          </div>
+        </li>
+      </ul>
+    </div>
 
     <section
       v-if="trajetEnAttenteDAccord"
