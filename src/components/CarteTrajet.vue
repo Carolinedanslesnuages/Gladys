@@ -1,49 +1,82 @@
 <script setup lang="ts">
 /**
- * Carte du trajet retenu : fond Plan IGN (service public, sans compte), tracé, repères « Départ »
+ * Carte du trajet retenu : fond OpenStreetMap (libre, sans compte), tracé, repères « Départ »
  * et « Arrivée ». Déplaçable et zoomable aux doigts, au clavier (flèches, + et −) et par deux
  * boutons. Sans réseau, le fond de carte est indisponible : un message le dit. La liste des étapes,
  * affichée sous la carte, en reste l'alternative écrite. Décision : docs/adr/0006-carte-du-trajet.md.
- * Pendant le trajet, la carte peut suivre la position de la personne, comme un GPS : flèche « Vous »
- * tournée dans le sens de la marche, plein écran, bouton pour se recentrer, distance restante,
+ * Pendant le trajet, la carte peut suivre la position de la personne, comme un GPS : véhicule « Vous »
+ * au centre, tourné dans le sens de la marche, plein écran, bouton pour se recentrer, distance restante,
  * alerte si elle quitte le trajet. Décision : docs/adr/0008-guidage-sur-la-carte.md.
+ * Fond OpenStreetMap plutôt que Plan IGN : docs/adr/0009-fond-de-carte-openstreetmap.md.
+ * Carte d'accueil, comme une application de navigation : elle remplit la place que lui donne
+ * l'écran, ses boutons sont posés dessus, et elle peut exister sans trajet (France entière, puis
+ * la personne si elle autorise sa position). Décision : docs/adr/0010-accueil-carte-plein-ecran.md.
+ * Pendant le suivi, le véhicule est placé plus bas que le centre (on voit la route devant) et la carte
+ * tourne dans le sens de la marche, sauf si la personne garde le nord en haut.
+ * Décision : docs/adr/0012-carte-dans-le-sens-de-la-marche.md.
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import Leaflet from 'leaflet'
+import 'leaflet-rotate'
 import 'leaflet/dist/leaflet.css'
 import type { Lieu } from '@/services/adresses'
 import type { PointDuTrace } from '@/services/itineraire'
 import { PositionRefusee, suivrePosition, type Coordonnees } from '@/services/position'
 import { avancementSurLeTrace, capEntre, distanceEntre } from '@/services/guidage'
 
-const props = defineProps<{ trace: PointDuTrace[]; depart: Lieu; arrivee: Lieu; enLigne: boolean }>()
+const props = defineProps<{
+  /** Tracé du trajet retenu ; vide tant qu'aucun itinéraire n'est calculé. */
+  trace: PointDuTrace[]
+  depart: Lieu | null
+  arrivee: Lieu | null
+  enLigne: boolean
+  /** Carte d'accueil : chercher la personne dès l'ouverture, sans alerte si elle refuse. */
+  suivreDesLOuverture?: boolean
+}>()
 
-/** Tuiles du Plan IGN (Géoplateforme, WMTS) : seule la zone affichée est demandée. */
-const FOND_PLAN_IGN =
-  'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2' +
-  '&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/png&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}'
+/** Sans trajet ni position : la France métropolitaine entière. */
+const CENTRE_DE_LA_FRANCE = Leaflet.latLng(46.6, 2.4)
+const ZOOM_DE_LA_FRANCE = 6
+const aUnTrajet = computed(() => props.trace.length >= 2)
+
+/** Tuiles OpenStreetMap (serveur de la fondation, sans compte) : seule la zone affichée est demandée. */
+const FOND_OPENSTREETMAP = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+/** Mention obligatoire de la licence OpenStreetMap (ODbL), avec un lien vers ses conditions. */
+const MENTION_OPENSTREETMAP =
+  'Fond de carte : © <a href="https://www.openstreetmap.org/copyright">les contributeurs d’OpenStreetMap</a>'
 
 const conteneurCarte = ref<HTMLElement | null>(null)
 const zoneCarte = ref<HTMLElement | null>(null)
 let carte: Leaflet.Map | null = null
+let coucheDuTrajet: Leaflet.LayerGroup | null = null
+let observateurDeTaille: ResizeObserver | null = null
 
 const animationsReduites = () =>
   typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /** Repère écrit (« Départ », « Arrivée ») : l'information ne passe pas par la couleur seule. */
 const repere = (libelle: string) =>
-  Leaflet.divIcon({ className: 'repere-carte', html: `<span class="etiquette-repere">${libelle}</span>`, iconSize: [0, 0] })
+  Leaflet.divIcon({
+    className: 'repere-carte',
+    html: `<span class="etiquette-repere">${libelle}</span>`,
+    iconSize: [0, 0],
+  })
 
-/** Repère de la personne : une flèche tournée dans le sens de la marche (un rond tant qu'elle est inconnue), et « Vous ». */
+/**
+ * Repère de la personne : son véhicule vu de dessus, centré sur sa position, tourné dans le sens de
+ * la marche (vers le haut tant que la direction est inconnue), et « Vous » écrit dessous.
+ */
 const repereDeLaPersonneIcone = () =>
   Leaflet.divIcon({
     className: 'repere-carte',
     iconSize: [0, 0],
     html:
       '<span class="repere-vous repere-vous--sans-direction">' +
-      '<svg class="fleche-vous" viewBox="0 0 32 32" width="40" height="40" aria-hidden="true" focusable="false">' +
-      '<path d="M16 2 L28 29 L16 22 L4 29 Z" /></svg>' +
-      '<span class="point-vous"></span>' +
+      // Une voiture sans permis : courte, presque aussi large que longue, en 24 px.
+      '<svg class="vehicule-vous" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true" focusable="false">' +
+      '<rect class="carrosserie-vous" x="7" y="5" width="18" height="22" rx="7" />' +
+      '<path class="vitre-vous" d="M10.5 12 Q16 8.5 21.5 12 L20.5 16 L11.5 16 Z" />' +
+      '<path class="vitre-vous" d="M12 22 L20 22 L20.5 24 Q16 25.5 11.5 24 Z" /></svg>' +
       '<span class="etiquette-repere">Vous</span></span>',
   })
 
@@ -61,28 +94,84 @@ function creerCarte(conteneur: HTMLElement): void {
     fadeAnimation: !sansAnimation,
     markerZoomAnimation: !sansAnimation,
     inertia: !sansAnimation,
+    // La carte peut tourner, mais seulement par GLADYS (sens de la marche) : pas de geste caché.
+    rotate: true,
+    rotateControl: false,
+    touchRotate: false,
+    shiftKeyRotate: false,
   })
-  Leaflet.control.attribution({ prefix: false }).addAttribution('Fond de carte : © IGN').addTo(carte)
-  Leaflet.tileLayer(FOND_PLAN_IGN, { minZoom: 6, maxZoom: 18, tileSize: 256 }).addTo(carte)
-  const pointsDuTrace = props.trace.map((point) => Leaflet.latLng(point.latitude, point.longitude))
-  const ligneDuTrajet = Leaflet.polyline(pointsDuTrace, { color: '#000091', weight: 5, interactive: false }).addTo(carte)
-  const pointDeDepart = pointsDuTrace[0]!
-  const pointDArrivee = pointsDuTrace[pointsDuTrace.length - 1]!
-  Leaflet.marker(pointDeDepart, { icon: repere('Départ'), interactive: false, keyboard: false }).addTo(carte)
-  Leaflet.marker(pointDArrivee, { icon: repere('Arrivée'), interactive: false, keyboard: false }).addTo(carte)
-  carte.fitBounds(ligneDuTrajet.getBounds(), { padding: [24, 24], animate: false })
+  Leaflet.control.attribution({ prefix: false }).addAttribution(MENTION_OPENSTREETMAP).addTo(carte)
+  Leaflet.tileLayer(FOND_OPENSTREETMAP, { minZoom: 6, maxZoom: 19, tileSize: 256 }).addTo(carte)
+  coucheDuTrajet = Leaflet.layerGroup().addTo(carte)
+  if (aUnTrajet.value) dessinerLeTrajet()
+  else carte.setView(CENTRE_DE_LA_FRANCE, ZOOM_DE_LA_FRANCE, { animate: false })
   // Déplacer la carte à la main (doigt ou flèches du clavier) la détache de la personne, comme un GPS.
   carte.on('dragstart', detacherLaCarte)
   conteneur.addEventListener('keydown', (evenement) => {
     if (TOUCHES_DE_DEPLACEMENT.includes(evenement.key)) detacherLaCarte()
   })
+  // La carte change de taille sans que la fenêtre bouge (plein écran, distance restante qui
+  // apparaît au-dessus…) : Leaflet doit le savoir, puis la personne est remise au centre.
+  if (typeof ResizeObserver === 'function') {
+    observateurDeTaille = new ResizeObserver(() => {
+      carte?.invalidateSize({ pan: false })
+      garderLaPersonneAuCentre()
+    })
+    observateurDeTaille.observe(conteneur)
+  }
+  // Le véhicule reste tourné dans le bon sens à l'écran quand la carte tourne.
+  carte.on('rotate', orienterLaFleche)
+  if (props.suivreDesLOuverture && !suiviActif.value) demarrerLeSuivi({ automatique: true })
 }
+
+/** Tracé et repères « Départ », « Arrivée » ; la carte se cadre sur tout le trajet. */
+function dessinerLeTrajet(): void {
+  if (!carte || !coucheDuTrajet) return
+  coucheDuTrajet.clearLayers()
+  if (!aUnTrajet.value) return
+  const pointsDuTrace = props.trace.map((point) => Leaflet.latLng(point.latitude, point.longitude))
+  const ligneDuTrajet = Leaflet.polyline(pointsDuTrace, {
+    color: '#000091',
+    weight: 5,
+    interactive: false,
+  }).addTo(coucheDuTrajet)
+  const pointDeDepart = pointsDuTrace[0]!
+  const pointDArrivee = pointsDuTrace[pointsDuTrace.length - 1]!
+  Leaflet.marker(pointDeDepart, {
+    icon: repere('Départ'),
+    interactive: false,
+    keyboard: false,
+  }).addTo(coucheDuTrajet)
+  Leaflet.marker(pointDArrivee, {
+    icon: repere('Arrivée'),
+    interactive: false,
+    keyboard: false,
+  }).addTo(coucheDuTrajet)
+  // Le trajet en entier se lit nord en haut, comme sur une carte papier.
+  carte.setBearing(0)
+  carte.fitBounds(ligneDuTrajet.getBounds(), { padding: [24, 24], animate: false })
+}
+
+// Nouveau trajet calculé : on le montre en entier ; « Me recentrer » ramène sur la personne.
+watch(
+  () => props.trace,
+  () => {
+    dessinerLeTrajet()
+    if (aUnTrajet.value && suiviActif.value && carteCentreeSurLaPersonne.value) {
+      carteCentreeSurLaPersonne.value = false
+      messageDuSuivi.value = 'Trajet affiché en entier. Utilisez « Me recentrer » pour revenir sur votre position.'
+    }
+  },
+)
 
 function retirerCarte(): void {
   quitterLePleinEcran()
   arreterLeSuivi()
+  observateurDeTaille?.disconnect()
+  observateurDeTaille = null
   carte?.remove()
   carte = null
+  coucheDuTrajet = null
 }
 
 /** La carte suit son conteneur : créée quand il apparaît (réseau présent), retirée quand il disparaît. */
@@ -112,7 +201,9 @@ let arreterLaGeolocalisation: (() => void) | null = null
 let repereDeLaPersonne: Leaflet.Marker | null = null
 let directionDeLaPersonne: number | null = null
 
-const avancement = computed(() => (positionSuivie.value ? avancementSurLeTrace(positionSuivie.value, props.trace) : null))
+const avancement = computed(() =>
+  positionSuivie.value && aUnTrajet.value ? avancementSurLeTrace(positionSuivie.value, props.trace) : null,
+)
 
 const enDistanceLisible = (metres: number) =>
   metres < 1000
@@ -130,11 +221,51 @@ function directionDeMarche(positionPrecedente: Coordonnees | null, nouvellePosit
   return directionDeLaPersonne
 }
 
+/** Le véhicule pointe dans le sens de la marche à l'écran : sa direction, plus la rotation de la carte. */
 function orienterLaFleche(): void {
   const repereAffiche = repereDeLaPersonne?.getElement()?.querySelector<HTMLElement>('.repere-vous')
-  if (!repereAffiche) return
+  if (!repereAffiche || !carte) return
   repereAffiche.classList.toggle('repere-vous--sans-direction', directionDeLaPersonne === null)
-  repereAffiche.style.setProperty('--direction-vous', `${directionDeLaPersonne ?? 0}deg`)
+  const directionALEcran = ((directionDeLaPersonne ?? 0) + carte.getBearing()) % 360
+  repereAffiche.style.setProperty('--direction-vous', `${directionALEcran}deg`)
+}
+
+/** Carte dans le sens de la marche (choix par défaut) ou nord en haut. */
+const sensDeLaMarche = ref(true)
+
+/** Tant qu'elle suit la personne, la carte tourne pour que la route devant soit en haut de l'écran. */
+function orienterLaCarte(): void {
+  if (!carte || !carteCentreeSurLaPersonne.value) return
+  if (!sensDeLaMarche.value) carte.setBearing(0)
+  else if (directionDeLaPersonne !== null) carte.setBearing(360 - directionDeLaPersonne)
+}
+
+function basculerLeSensDeLaCarte(): void {
+  sensDeLaMarche.value = !sensDeLaMarche.value
+  if (!sensDeLaMarche.value) carte?.setBearing(0)
+  else orienterLaCarte()
+  garderLaPersonneAuCentre()
+  messageDuSuivi.value = sensDeLaMarche.value
+    ? 'La carte tourne dans le sens de la marche.'
+    : 'Nord en haut : la carte ne tourne plus.'
+}
+
+/** Part de la hauteur de la carte entre le centre et le véhicule : on voit plus de route devant. */
+const PART_DE_LA_HAUTEUR_SOUS_LE_CENTRE = 0.2
+
+/**
+ * Centre de la carte qui place la personne plus bas que le milieu de l'écran, même carte tournée :
+ * le décalage « vers le haut de l'écran » est ramené dans le sens de la carte.
+ */
+function centreQuiMontreLaRouteDevant(point: Leaflet.LatLng, zoom: number): Leaflet.LatLng {
+  if (!carte) return point
+  const decalagePixels = carte.getSize().y * PART_DE_LA_HAUTEUR_SOUS_LE_CENTRE
+  const rotationRadians = (carte.getBearing() * Math.PI) / 180
+  const versLeHautDeLEcran = Leaflet.point(
+    -decalagePixels * Math.sin(rotationRadians),
+    -decalagePixels * Math.cos(rotationRadians),
+  )
+  return carte.unproject(carte.project(point, zoom).add(versLeHautDeLEcran), zoom)
 }
 
 function placerLaPersonne(coordonnees: Coordonnees): void {
@@ -152,13 +283,25 @@ function placerLaPersonne(coordonnees: Coordonnees): void {
       keyboard: false,
       zIndexOffset: 1000,
     }).addTo(carte)
-  orienterLaFleche()
   if (premierePosition) {
     carteCentreeSurLaPersonne.value = true
     messageDuSuivi.value = 'Position trouvée : la carte vous suit.'
   }
-  if (carteCentreeSurLaPersonne.value)
-    carte.setView(point, premierePosition ? ZOOM_DU_SUIVI : carte.getZoom(), { animate: !animationsReduites() })
+  orienterLaCarte()
+  orienterLaFleche()
+  if (carteCentreeSurLaPersonne.value) {
+    const zoom = premierePosition ? ZOOM_DU_SUIVI : carte.getZoom()
+    carte.setView(centreQuiMontreLaRouteDevant(point, zoom), zoom, {
+      animate: !animationsReduites(),
+    })
+  }
+}
+
+/** Après un changement de taille de la carte, la personne suivie reste à sa place, sans animation. */
+function garderLaPersonneAuCentre(): void {
+  if (!carte || !suiviActif.value || !carteCentreeSurLaPersonne.value || !positionSuivie.value) return
+  const point = Leaflet.latLng(positionSuivie.value.latitude, positionSuivie.value.longitude)
+  carte.panTo(centreQuiMontreLaRouteDevant(point, carte.getZoom()), { animate: false })
 }
 
 function detacherLaCarte(): void {
@@ -175,26 +318,34 @@ function recentrerSurLaPersonne(): void {
   }
   carteCentreeSurLaPersonne.value = true
   messageDuSuivi.value = 'Carte recentrée : la carte vous suit.'
-  if (carte && positionSuivie.value)
-    carte.setView(Leaflet.latLng(positionSuivie.value.latitude, positionSuivie.value.longitude), ZOOM_DU_SUIVI, {
+  orienterLaCarte()
+  if (carte && positionSuivie.value) {
+    const point = Leaflet.latLng(positionSuivie.value.latitude, positionSuivie.value.longitude)
+    carte.setView(centreQuiMontreLaRouteDevant(point, ZOOM_DU_SUIVI), ZOOM_DU_SUIVI, {
       animate: !animationsReduites(),
     })
+  }
 }
 
-function signalerErreurDuSuivi(erreur: Error): void {
+function signalerErreurDuSuivi(erreur: Error, automatique: boolean): void {
   arreterLeSuivi()
+  // À l'ouverture, sans position : la carte montre la France, sans alerte (la personne n'a rien demandé).
+  if (automatique) {
+    messageDuSuivi.value = 'Position non disponible : la carte montre la France. « Me recentrer » la cherche à nouveau.'
+    return
+  }
   erreurDuSuivi.value =
     erreur instanceof PositionRefusee
       ? 'Position refusée : autorisez la localisation pour GLADYS dans les réglages du téléphone.'
       : 'Votre position est introuvable pour le moment. Réessayez dans un endroit dégagé.'
 }
 
-function demarrerLeSuivi(): void {
+function demarrerLeSuivi({ automatique = false } = {}): void {
   erreurDuSuivi.value = ''
   messageDuSuivi.value = 'Recherche de votre position…'
   suiviActif.value = true
   carteCentreeSurLaPersonne.value = true
-  arreterLaGeolocalisation = suivrePosition(placerLaPersonne, signalerErreurDuSuivi)
+  arreterLaGeolocalisation = suivrePosition(placerLaPersonne, (erreur) => signalerErreurDuSuivi(erreur, automatique))
 }
 
 function arreterLeSuivi(): void {
@@ -203,6 +354,7 @@ function arreterLeSuivi(): void {
   repereDeLaPersonne?.remove()
   repereDeLaPersonne = null
   directionDeLaPersonne = null
+  carte?.setBearing(0)
   if (suiviActif.value) messageDuSuivi.value = 'La carte ne suit plus votre position.'
   suiviActif.value = false
   positionSuivie.value = null
@@ -244,7 +396,7 @@ async function entrerEnPleinEcran(): Promise<void> {
   if (suiviActif.value) recentrerSurLaPersonne()
   else demarrerLeSuivi()
   await nextTick()
-  carte?.invalidateSize()
+  carte?.invalidateSize({ pan: false })
   if (zoneCarte.value) mettreDeCoteLeResteDeLaPage(zoneCarte.value)
   document.getElementById('bouton-quitter-plein-ecran')?.focus()
 }
@@ -256,142 +408,211 @@ async function quitterLePleinEcran(): Promise<void> {
   window.removeEventListener('keydown', sortirAvecEchap)
   remettreLeResteDeLaPage()
   await nextTick()
-  carte?.invalidateSize()
+  carte?.invalidateSize({ pan: false })
   document.getElementById('bouton-plein-ecran')?.focus()
 }
 
-const nomDeLaCarte = () => `Carte du trajet de ${props.depart.libelle} à ${props.arrivee.libelle}`
+const nomDeLaCarte = () =>
+  aUnTrajet.value && props.depart && props.arrivee
+    ? `Carte du trajet de ${props.depart.libelle} à ${props.arrivee.libelle}`
+    : 'Carte autour de ma position'
 </script>
 
 <template>
-  <div id="etat-carte" role="status">
-    <DsfrAlert
-      v-if="!enLigne"
-      type="info"
-      small
-      class="fr-mb-2w"
-      description="Carte indisponible sans connexion. Les étapes de votre trajet restent lisibles ci-dessous."
-    />
-  </div>
-  <div
-    v-if="enLigne"
-    id="zone-carte"
-    ref="zoneCarte"
-    :class="{ 'zone-carte--plein-ecran': pleinEcran }"
-    :role="pleinEcran ? 'dialog' : undefined"
-    :aria-modal="pleinEcran ? 'true' : undefined"
-    :aria-label="pleinEcran ? 'Carte en plein écran' : undefined"
-  >
-    <template v-if="!pleinEcran">
-      <div class="fr-btns-group fr-btns-group--inline fr-mb-1w">
+  <div class="carte-complete">
+    <div id="etat-carte" role="status" class="etat-carte">
+      <DsfrAlert
+        v-if="!enLigne"
+        type="info"
+        small
+        description="Carte indisponible sans connexion. Les étapes de votre trajet restent lisibles plus bas."
+      />
+    </div>
+    <div
+      v-if="enLigne"
+      id="zone-carte"
+      ref="zoneCarte"
+      class="zone-carte"
+      :class="{ 'zone-carte--plein-ecran': pleinEcran }"
+      :role="pleinEcran ? 'dialog' : undefined"
+      :aria-modal="pleinEcran ? 'true' : undefined"
+      :aria-label="pleinEcran ? 'Carte en plein écran' : undefined"
+    >
+      <p id="aide-carte" class="fr-sr-only">
+        Déplacez la carte avec le doigt ou les flèches du clavier. Zoomez avec les boutons, ou les touches + et −. Votre
+        position reste sur ce téléphone. Quand elle vous suit, la carte tourne dans le sens de la marche, sauf si vous
+        gardez le nord en haut. Gardez les yeux sur la route : regardez la carte seulement à l’arrêt.
+        <template v-if="pleinEcran">Touche Échap pour quitter le plein écran.</template>
+      </p>
+      <div
+        id="carte-trajet"
+        ref="conteneurCarte"
+        class="carte-trajet"
+        role="region"
+        :aria-label="nomDeLaCarte()"
+        aria-describedby="aide-carte"
+      ></div>
+      <p id="annonce-suivi" role="status" class="fr-sr-only">{{ messageDuSuivi }}</p>
+      <!-- Posés sur la carte : la distance restante en bas, les boutons à droite. -->
+      <div v-if="erreurDuSuivi || avancement || $slots['sur-la-carte']" class="infos-carte">
+        <!-- Ce que l'écran pose sur la carte (ex. : durée et distance du trajet). -->
+        <slot name="sur-la-carte" />
+        <DsfrAlert v-if="erreurDuSuivi" type="error" small :description="erreurDuSuivi" />
+        <div v-if="avancement" id="avancement-trajet" class="panneau-avancement">
+          <p class="fr-text--lg fr-mb-0">
+            <strong>Il vous reste {{ enDistanceLisible(avancement.distanceRestanteMetres) }}</strong>
+            jusqu’à l’arrivée.
+          </p>
+          <DsfrAlert
+            v-if="avancement.horsDuTrajet"
+            type="warning"
+            small
+            class="fr-mt-1w"
+            :description="`Vous êtes à ${enDistanceLisible(avancement.ecartAuTrajetMetres)} du trajet prévu. Rejoignez-le dès que possible, ou calculez un nouvel itinéraire.`"
+          />
+        </div>
+      </div>
+      <!-- Boutons à icône seule : leur intitulé est lu par les lecteurs d'écran et affiché au survol. -->
+      <div class="commandes-carte">
         <DsfrButton
-          id="bouton-plein-ecran"
+          v-if="pleinEcran || (suiviActif && !carteCentreeSurLaPersonne)"
           type="button"
           size="lg"
-          icon="fr-icon-fullscreen-line"
-          label="Afficher la carte en plein écran"
-          @click="entrerEnPleinEcran"
+          icon-only
+          icon="fr-icon-focus-3-line"
+          label="Me recentrer sur ma position"
+          aria-label="Me recentrer sur ma position"
+          @click="recentrerSurLaPersonne"
         />
         <DsfrButton
           type="button"
           secondary
           size="lg"
+          icon-only
           :icon="suiviActif ? 'fr-icon-close-circle-line' : 'fr-icon-map-pin-2-line'"
           :label="suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'"
+          :aria-label="suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'"
           @click="basculerLeSuivi"
         />
+        <DsfrButton
+          v-if="suiviActif"
+          type="button"
+          secondary
+          size="lg"
+          icon-only
+          icon="fr-icon-compass-3-line"
+          :label="sensDeLaMarche ? 'Garder le nord en haut de la carte' : 'Tourner la carte dans le sens de la marche'"
+          :aria-label="
+            sensDeLaMarche ? 'Garder le nord en haut de la carte' : 'Tourner la carte dans le sens de la marche'
+          "
+          @click="basculerLeSensDeLaCarte"
+        />
+        <DsfrButton
+          type="button"
+          secondary
+          size="lg"
+          icon-only
+          icon="fr-icon-zoom-in-line"
+          label="Zoomer sur la carte"
+          aria-label="Zoomer sur la carte"
+          @click="zoomer"
+        />
+        <DsfrButton
+          type="button"
+          secondary
+          size="lg"
+          icon-only
+          icon="fr-icon-zoom-out-line"
+          label="Dézoomer la carte"
+          aria-label="Dézoomer la carte"
+          @click="dezoomer"
+        />
+        <DsfrButton
+          v-if="pleinEcran"
+          id="bouton-quitter-plein-ecran"
+          type="button"
+          secondary
+          size="lg"
+          icon-only
+          icon="fr-icon-collapse-line"
+          label="Quitter le plein écran"
+          aria-label="Quitter le plein écran"
+          @click="quitterLePleinEcran"
+        />
+        <DsfrButton
+          v-else
+          id="bouton-plein-ecran"
+          type="button"
+          secondary
+          size="lg"
+          icon-only
+          icon="fr-icon-fullscreen-line"
+          label="Afficher la carte en plein écran"
+          aria-label="Afficher la carte en plein écran"
+          @click="entrerEnPleinEcran"
+        />
       </div>
-      <p class="fr-text--sm fr-mb-1w">
-        Votre position reste sur ce téléphone. Gardez les yeux sur la route : regardez la carte seulement à l’arrêt.
-      </p>
-    </template>
-    <p id="annonce-suivi" role="status" class="fr-sr-only">{{ messageDuSuivi }}</p>
-    <DsfrAlert v-if="erreurDuSuivi" type="error" small class="fr-mb-1w" :description="erreurDuSuivi" />
-    <div v-if="avancement" id="avancement-trajet" class="fr-mb-1w">
-      <p class="fr-text--lg fr-mb-1w">
-        <strong>Il vous reste {{ enDistanceLisible(avancement.distanceRestanteMetres) }}</strong> jusqu’à l’arrivée.
-      </p>
-      <DsfrAlert
-        v-if="avancement.horsDuTrajet"
-        type="warning"
-        small
-        :description="`Vous êtes à ${enDistanceLisible(avancement.ecartAuTrajetMetres)} du trajet prévu. Rejoignez-le dès que possible, ou calculez un nouvel itinéraire.`"
-      />
-    </div>
-    <p id="aide-carte" class="fr-text--sm fr-mb-1w" :class="{ 'fr-sr-only': pleinEcran }">
-      Déplacez la carte avec le doigt ou les flèches du clavier. Zoomez avec les boutons, ou les touches + et −.
-      <template v-if="pleinEcran">Touche Échap pour quitter le plein écran.</template>
-    </p>
-    <div
-      id="carte-trajet"
-      ref="conteneurCarte"
-      class="carte-trajet"
-      role="region"
-      :aria-label="nomDeLaCarte()"
-      aria-describedby="aide-carte"
-    ></div>
-    <div class="fr-btns-group fr-btns-group--inline fr-mt-1w fr-mb-0">
-      <DsfrButton
-        v-if="pleinEcran || (suiviActif && !carteCentreeSurLaPersonne)"
-        type="button"
-        :size="pleinEcran ? 'md' : 'lg'"
-        icon="fr-icon-focus-3-line"
-        label="Me recentrer sur ma position"
-        @click="recentrerSurLaPersonne"
-      />
-      <DsfrButton
-        type="button"
-        secondary
-        :size="pleinEcran ? 'md' : 'lg'"
-        icon="fr-icon-zoom-in-line"
-        label="Zoomer sur la carte"
-        @click="zoomer"
-      />
-      <DsfrButton
-        type="button"
-        secondary
-        :size="pleinEcran ? 'md' : 'lg'"
-        icon="fr-icon-zoom-out-line"
-        label="Dézoomer la carte"
-        @click="dezoomer"
-      />
-      <DsfrButton
-        v-if="pleinEcran"
-        id="bouton-quitter-plein-ecran"
-        type="button"
-        tertiary
-        size="md"
-        icon="fr-icon-collapse-line"
-        label="Quitter le plein écran"
-        @click="quitterLePleinEcran"
-      />
     </div>
   </div>
 </template>
 
 <style scoped>
-.carte-trajet {
+/* La carte remplit la place que l'écran lui donne (tout l'écran sous l'en-tête, à l'accueil). */
+.carte-complete {
+  position: relative;
   width: 100%;
-  height: 18rem;
-  border: 1px solid var(--border-default-grey);
+  height: 100%;
+  min-height: 18rem;
 }
-.carte-trajet:focus-visible {
-  outline: 2px solid #0a76f6;
-  outline-offset: 2px;
+.etat-carte {
+  position: absolute;
+  inset: auto 0.5rem 0.5rem;
+  z-index: 1000;
+}
+.zone-carte {
+  position: absolute;
+  inset: 0;
 }
 .zone-carte--plein-ecran {
   position: fixed;
-  inset: 0;
   z-index: 1800;
-  display: flex;
-  flex-direction: column;
-  padding: 0.5rem;
   background: var(--background-default-grey);
 }
-.zone-carte--plein-ecran .carte-trajet {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 10rem;
+.carte-trajet {
+  position: absolute;
+  inset: 0;
+}
+.carte-trajet:focus-visible {
+  outline: 2px solid #0a76f6;
+  outline-offset: -4px;
+}
+/* Fonds blancs sous les éléments posés sur la carte : ils restent lisibles sur toutes les rues. */
+.infos-carte {
+  position: absolute;
+  left: 0.5rem;
+  right: 4.5rem;
+  bottom: 1.75rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.panneau-avancement {
+  padding: 0.5rem 0.75rem;
+  background: var(--background-default-grey);
+  box-shadow: 0 2px 6px rgb(0 0 18 / 16%);
+}
+.commandes-carte {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 1.75rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--background-default-grey);
+  box-shadow: 0 2px 6px rgb(0 0 18 / 16%);
 }
 .carte-trajet :deep(.etiquette-repere) {
   display: inline-block;
@@ -404,7 +625,7 @@ const nomDeLaCarte = () => `Carte du trajet de ${props.depart.libelle} à ${prop
   font-size: 0.875rem;
   transform: translate(-50%, -50%);
 }
-/* Repère de la personne : la flèche est centrée sur sa position, « Vous » écrit dessous. */
+/* Repère de la personne : le véhicule (24 px) est centré sur sa position, « Vous » écrit dessous. */
 .carte-trajet :deep(.repere-vous) {
   position: absolute;
   left: 0;
@@ -412,36 +633,25 @@ const nomDeLaCarte = () => `Carte du trajet de ${props.depart.libelle} à ${prop
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: translate(-50%, -20px);
+  transform: translate(-50%, -12px);
 }
 .carte-trajet :deep(.repere-vous .etiquette-repere) {
   transform: none;
 }
-.carte-trajet :deep(.fleche-vous) {
+.carte-trajet :deep(.vehicule-vous) {
   transform: rotate(var(--direction-vous, 0deg));
-  fill: var(--background-action-high-blue-france);
-  stroke: var(--background-default-grey);
-  stroke-width: 2.5;
-  stroke-linejoin: round;
   transition: transform 0.3s ease-out;
 }
-.carte-trajet :deep(.point-vous) {
-  display: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  margin: 0.5rem;
-  border: 3px solid var(--background-default-grey);
-  border-radius: 50%;
-  background: var(--background-action-high-blue-france);
+.carte-trajet :deep(.carrosserie-vous) {
+  fill: var(--background-action-high-blue-france);
+  stroke: var(--background-default-grey);
+  stroke-width: 2;
 }
-.carte-trajet :deep(.repere-vous--sans-direction .fleche-vous) {
-  display: none;
-}
-.carte-trajet :deep(.repere-vous--sans-direction .point-vous) {
-  display: block;
+.carte-trajet :deep(.vitre-vous) {
+  fill: var(--background-default-grey);
 }
 @media (prefers-reduced-motion: reduce) {
-  .carte-trajet :deep(.fleche-vous) {
+  .carte-trajet :deep(.vehicule-vous) {
     transition: none;
   }
 }

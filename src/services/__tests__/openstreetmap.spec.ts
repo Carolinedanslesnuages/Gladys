@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
+  EVITEMENT_VOIES_PRIVEES,
   IMPORTANCE_PAR_CLASSE_DE_ROUTE,
   calculerItineraireOpenStreetMap,
   completerLesCodes,
@@ -132,6 +133,31 @@ describe('Calcul d’itinéraire avec OpenStreetMap (demande #18)', () => {
     expect(resultat.itineraire.departementaleFortTraficMetres).toBe(0)
     expect(resultat.retenuEstLePlusCourt).toBe(false)
     expect(resultat.itineraire.trace).toHaveLength(5)
+  })
+
+  it('ne passe jamais chez le voisin : départ et arrivée sur une vraie rue, voies privées et allées évitées', async () => {
+    fetchSimule.mockImplementation(simulerOpenStreetMap(trajetsDijonBeaune, nomsDesCommunes))
+    await calculerItineraireOpenStreetMap(dijon, beaune, 30)
+    const demandesDeTrajet = fetchSimule.mock.calls
+      .filter(([adresse]) => adresse.endsWith('/route'))
+      .map(([, options]) => JSON.parse(String(options?.body)))
+    expect(demandesDeTrajet.length).toBeGreaterThan(0)
+    for (const corps of demandesDeTrajet) {
+      for (const lieu of corps.locations) expect(lieu.search_filter).toEqual({ min_road_class: 'residential' })
+      expect(corps.costing_options.motor_scooter).toMatchObject(EVITEMENT_VOIES_PRIVEES)
+    }
+    expect(EVITEMENT_VOIES_PRIVEES.use_tracks).toBe(0)
+  })
+
+  it('le trajet le plus court ne coupe pas par une cour : il garde l’évitement des voies de desserte', async () => {
+    // « shortest » annule tout évitement : le trajet couperait par la cour d’un voisin.
+    fetchSimule.mockImplementation(simulerOpenStreetMap(trajetsDijonBeaune, nomsDesCommunes))
+    await calculerItineraireOpenStreetMap(dijon, beaune, 30)
+    const optionsDesTrajets = fetchSimule.mock.calls
+      .filter(([adresse]) => adresse.endsWith('/route'))
+      .map(([, options]) => JSON.parse(String(options?.body)).costing_options.motor_scooter)
+    for (const options of optionsDesTrajets) expect(options).not.toHaveProperty('shortest')
+    expect(optionsDesTrajets).toContainEqual(expect.objectContaining({ use_distance: 1 }))
   })
 
   it('nomme les villages, même loin de toute adresse, et regroupe les tronçons d’une même route', async () => {

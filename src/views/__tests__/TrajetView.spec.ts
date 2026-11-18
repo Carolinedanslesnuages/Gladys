@@ -11,11 +11,15 @@ import { simulerOpenStreetMap, type TrajetsSimules } from '@/__tests__/openstree
 const reponseBaseAdresse = (libelles: string[]) =>
   new Response(
     JSON.stringify({
-      features: libelles.map((libelle) => ({ geometry: { coordinates: [4.85, 45.75] }, properties: { label: libelle } })),
+      features: libelles.map((libelle) => ({
+        geometry: { coordinates: [4.85, 45.75] },
+        properties: { label: libelle },
+      })),
     }),
   )
 
-const definirEnLigne = (valeur: boolean) => Object.defineProperty(navigator, 'onLine', { value: valeur, configurable: true })
+const definirEnLigne = (valeur: boolean) =>
+  Object.defineProperty(navigator, 'onLine', { value: valeur, configurable: true })
 
 const simulerPosition = (accordee: boolean) =>
   Object.defineProperty(navigator, 'geolocation', {
@@ -25,6 +29,9 @@ const simulerPosition = (accordee: boolean) =>
         succes: (position: { coords: { latitude: number; longitude: number } }) => void,
         echec: (erreurPosition: { code: number }) => void,
       ) => (accordee ? succes({ coords: { latitude: 45.75, longitude: 4.85 } }) : echec({ code: 1 })),
+      // La carte d'accueil suit la position : ici, elle attend sans jamais la recevoir.
+      watchPosition: () => 1,
+      clearWatch: () => {},
     },
   })
 
@@ -48,7 +55,14 @@ async function choisirLieu(ecran: Ecran, idChamp: string, texte: string, libelle
   await boutonNomme(ecran, libelle).trigger('click')
 }
 
+/** Le départ est « Ma position » par défaut : le toucher ouvre le champ « Départ ». */
+async function ouvrirLeDepart(ecran: Ecran): Promise<void> {
+  await boutonNomme(ecran, 'Départ : Ma position. Changer le départ').trigger('click')
+  await flushPromises()
+}
+
 async function preparerTrajet(ecran: Ecran, depart: string, arrivee: string): Promise<void> {
+  await ouvrirLeDepart(ecran)
   await choisirLieu(ecran, 'depart', depart, depart)
   await choisirLieu(ecran, 'arrivee', arrivee, arrivee)
   await ecran.find('form').trigger('submit')
@@ -70,12 +84,97 @@ describe('Écran « Préparer mon trajet »', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     definirEnLigne(true)
+    Reflect.deleteProperty(navigator, 'geolocation')
     document.body.innerHTML = ''
+  })
+
+  describe('Demande #26 : accueil comme une application de navigation', () => {
+    it('la carte occupe l’écran dès l’arrivée, avec la seule barre « Où allez-vous ? » posée dessus', () => {
+      const ecran = monter()
+      expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe('Carte autour de ma position')
+      const barre = ecran.find('#barre-destination')
+      expect(barre.attributes('role')).toBe('search')
+      expect(barre.attributes('aria-label')).toBe('Où allez-vous ?')
+      expect(ecran.find('label[for="arrivee"]').text()).toContain('Où allez-vous ?')
+      // La barre vient avant la carte : au clavier, on y arrive en premier.
+      const carte = ecran.find('#carte-trajet').element
+      expect(barre.element.compareDocumentPosition(carte) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(ecran.find('#depart').exists()).toBe(false)
+      expect(ecran.findAll('h1')).toHaveLength(1)
+      ecran.unmount()
+    })
+
+    it('le bouton « Menu » est posé sur la carte, après la barre au clavier', () => {
+      const ecran = monter()
+      const menu = ecran.find('#bouton-menu')
+      expect(menu.text()).toBe('Menu')
+      const barre = ecran.find('#barre-destination').element
+      const carte = ecran.find('#carte-trajet').element
+      expect(barre.compareDocumentPosition(menu.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(menu.element.compareDocumentPosition(carte) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      ecran.unmount()
+    })
+
+    it('le départ est « Ma position » ; le toucher permet d’en choisir un autre, puis d’y revenir', async () => {
+      const ecran = monter()
+      await ouvrirLeDepart(ecran)
+      expect(document.activeElement?.id).toBe('depart')
+      await boutonNomme(ecran, 'Utiliser ma position actuelle').trigger('click')
+      await flushPromises()
+      expect(ecran.find('#depart').exists()).toBe(false)
+      expect(document.activeElement?.id).toBe('bouton-depart-ma-position')
+      expect(statut(ecran).text()).toBe('Départ : votre position actuelle.')
+      ecran.unmount()
+    })
+
+    it('toucher la barre affiche mes trajets récents dessous ; en choisir un le reprend', async () => {
+      simulerLocalStorage({
+        'gladys:accord-historique': JSON.stringify('accepte'),
+        'gladys:trajets-recents': JSON.stringify([
+          {
+            depart: { libelle: 'Lyon', latitude: 45.75, longitude: 4.85 },
+            arrivee: { libelle: 'Vienne', latitude: 45.52, longitude: 4.87 },
+            valideLe: '2026-11-16T10:00:00Z',
+          },
+        ]),
+      })
+      const ecran = monter()
+      expect(ecran.find('#trajets-sous-la-barre').exists()).toBe(false)
+      await ecran.find('#arrivee').trigger('focusin')
+      const sousLaBarre = ecran.find('#trajets-sous-la-barre')
+      expect(sousLaBarre.text()).toContain('Mes trajets récents')
+      await sousLaBarre.find('button').trigger('click')
+      expect((ecran.find('#arrivee').element as HTMLInputElement).value).toBe('Vienne')
+      expect((ecran.find('#depart').element as HTMLInputElement).value).toBe('Lyon')
+      expect(ecran.find('#trajets-sous-la-barre').exists()).toBe(false)
+      ecran.unmount()
+    })
+
+    it('Échap referme les trajets récents sous la barre', async () => {
+      simulerLocalStorage({
+        'gladys:accord-historique': JSON.stringify('accepte'),
+        'gladys:trajets-recents': JSON.stringify([
+          {
+            depart: { libelle: 'Lyon', latitude: 45.75, longitude: 4.85 },
+            arrivee: { libelle: 'Vienne', latitude: 45.52, longitude: 4.87 },
+            valideLe: '2026-11-16T10:00:00Z',
+          },
+        ]),
+      })
+      const ecran = monter()
+      await ecran.find('#arrivee').trigger('focusin')
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      await ecran.find('#arrivee').trigger('keydown', { key: 'Escape' })
+      expect(ecran.find('#trajets-sous-la-barre').exists()).toBe(false)
+      ecran.unmount()
+    })
   })
 
   describe('Critère 1 : saisir une adresse ou une commune pour le départ et l’arrivée', () => {
     it('propose des communes et des adresses pendant la saisie et retient le choix', async () => {
       const ecran = monter()
+      await ouvrirLeDepart(ecran)
       fetchSimule.mockResolvedValueOnce(reponseBaseAdresse(['Vienne', 'Vienne-en-Arthies']))
       await taper(ecran, 'depart', 'Vienne')
       expect(fetchSimule.mock.calls[0]![0]).toContain('q=Vienne')
@@ -96,33 +195,43 @@ describe('Écran « Préparer mon trajet »', () => {
     it('demande de choisir un lieu dans la liste avant de valider', async () => {
       const ecran = monter()
       await ecran.find('form').trigger('submit')
-      expect(ecran.text()).toContain('Choisissez votre départ dans la liste des propositions.')
       expect(ecran.text()).toContain('Choisissez votre arrivée dans la liste des propositions.')
+      expect(ecran.find('#arrivee').attributes('aria-describedby')).toBeTruthy()
+      expect(document.activeElement?.id).toBe('arrivee')
+      await ouvrirLeDepart(ecran)
+      await choisirLieu(ecran, 'arrivee', 'Vienne', 'Vienne')
+      await ecran.find('form').trigger('submit')
+      await flushPromises()
+      expect(ecran.text()).toContain('Choisissez votre départ dans la liste des propositions.')
       expect(ecran.find('#depart').attributes('aria-describedby')).toBeTruthy()
       ecran.unmount()
     })
   })
 
   describe('Critère 2 : utiliser ma position actuelle comme départ', () => {
-    it('remplit le départ avec l’adresse la plus proche quand la position est accordée', async () => {
+    it('par défaut, le départ est l’adresse la plus proche de ma position, trouvée en validant', async () => {
       simulerPosition(true)
-      fetchSimule.mockResolvedValueOnce(reponseBaseAdresse(['12 Rue de la République 69001 Lyon']))
       const ecran = monter()
-      await boutonNomme(ecran, 'Utiliser ma position actuelle').trigger('click')
+      await choisirLieu(ecran, 'arrivee', 'Vienne', 'Vienne')
+      fetchSimule.mockResolvedValueOnce(reponseBaseAdresse(['12 Rue de la République 69001 Lyon']))
+      await ecran.find('form').trigger('submit')
       await flushPromises()
-      expect(fetchSimule.mock.calls[0]![0]).toContain('/reverse?lat=45.75&lon=4.85')
-      expect((ecran.find('#depart').element as HTMLInputElement).value).toBe('12 Rue de la République 69001 Lyon')
-      expect(ecran.text()).toContain('Départ rempli avec votre position actuelle')
+      expect(fetchSimule.mock.calls[1]![0]).toContain('/reverse?lat=45.75&lon=4.85')
+      expect(statut(ecran).text()).toBe('Trajet prêt : de 12 Rue de la République 69001 Lyon à Vienne.')
+      expect(ecran.find('#titre-itineraire').exists()).toBe(true)
       ecran.unmount()
     })
 
-    it('affiche un message clair quand la position est refusée', async () => {
+    it('affiche un message clair, relié au champ « Départ », quand la position est refusée', async () => {
       simulerPosition(false)
       const ecran = monter()
-      await boutonNomme(ecran, 'Utiliser ma position actuelle').trigger('click')
+      // Choisir la destination suffit : le trajet se prépare tout seul.
+      await choisirLieu(ecran, 'arrivee', 'Vienne', 'Vienne')
       await flushPromises()
       expect(ecran.text()).toContain('Position refusée : autorisez la localisation pour GLADYS')
-      expect(fetchSimule).not.toHaveBeenCalled()
+      expect(ecran.find('#depart').attributes('aria-describedby')).toBeTruthy()
+      expect(document.activeElement?.id).toBe('depart')
+      expect(fetchSimule).toHaveBeenCalledTimes(1)
       ecran.unmount()
     })
   })
@@ -139,17 +248,18 @@ describe('Écran « Préparer mon trajet »', () => {
     it('dit que la recherche a besoin du réseau quand le service ne répond pas', async () => {
       fetchSimule.mockRejectedValueOnce(new TypeError('Failed to fetch'))
       const ecran = monter()
-      await taper(ecran, 'depart', 'Lyon')
+      await taper(ecran, 'arrivee', 'Lyon')
       expect(ecran.text()).toContain('La recherche d’adresse a besoin du réseau')
       ecran.unmount()
     })
 
-    it('hors connexion, désactive la recherche et la position et l’explique', async () => {
+    it('hors connexion, désactive la recherche et l’explique', async () => {
       definirEnLigne(false)
       const ecran = monter()
       expect(ecran.text()).toContain('Sans réseau, la recherche d’adresse et la position actuelle sont indisponibles')
+      expect(ecran.find('#arrivee').attributes('disabled')).toBeDefined()
+      await ouvrirLeDepart(ecran)
       expect(ecran.find('#depart').attributes('disabled')).toBeDefined()
-      expect(boutonNomme(ecran, 'Utiliser ma position actuelle').attributes('disabled')).toBeDefined()
       ecran.unmount()
     })
   })
@@ -224,7 +334,10 @@ describe('Écran « Préparer mon trajet »', () => {
           portions: [
             {
               steps: [
-                { distance: metres - departementaleFortTraficMetres, attributes: { cpx_numero: 'C3' } },
+                {
+                  distance: metres - departementaleFortTraficMetres,
+                  attributes: { cpx_numero: 'C3' },
+                },
                 { distance: departementaleFortTraficMetres, attributes: { cpx_numero: 'D502' } },
               ],
             },
@@ -253,7 +366,9 @@ describe('Écran « Préparer mon trajet »', () => {
       expect(resultat(ecran).attributes('role')).toBe('status')
       expect(resultat(ecran).text()).toContain('Distance totale10 km')
       expect(resultat(ecran).text()).toContain('Aucun kilomètre : trajet sans route à fort trafic')
-      expect(resultat(ecran).text()).toContain('Itinéraire calculé : 10 km, sans autoroute ni voie rapide, sans route à fort trafic.')
+      expect(resultat(ecran).text()).toContain(
+        'Itinéraire calculé : 10 km, sans autoroute ni voie rapide, sans route à fort trafic.',
+      )
       ecran.unmount()
     })
 
@@ -361,6 +476,50 @@ describe('Écran « Préparer mon trajet »', () => {
 
     const duree = (ecran: Ecran) => ecran.find('#duree-trajet')
 
+    it('Demande #26 : le calcul part dès le choix de la destination ; durée et distance s’affichent sur la carte', async () => {
+      const ecran = monter()
+      await ouvrirLeDepart(ecran)
+      await choisirLieu(ecran, 'depart', 'Lyon', 'Lyon')
+      fetchSimule.mockClear()
+      fetchSimule
+        .mockResolvedValueOnce(reponseBaseAdresse(['Vienne']))
+        .mockResolvedValueOnce(reponseAvecVitesses())
+        .mockResolvedValueOnce(reponseAvecVitesses())
+      await taper(ecran, 'arrivee', 'Vienne')
+      await boutonNomme(ecran, 'Vienne').trigger('click')
+      await flushPromises()
+      // Une recherche d'adresse, puis les deux calculs : sans toucher « Calculer mon itinéraire ».
+      expect(fetchSimule).toHaveBeenCalledTimes(3)
+      const resume = ecran.find('#zone-carte #resume-trajet')
+      expect(resume.text()).toContain('32 min')
+      expect(resume.text()).toContain('21 km')
+      expect(resume.text()).toContain('Arrivée vers')
+      expect(ecran.text()).not.toContain('Valider mon trajet')
+      await boutonNomme(ecran, 'Voir le détail du trajet').trigger('click')
+      expect(document.activeElement?.id).toBe('titre-itineraire')
+      ecran.unmount()
+    })
+
+    it('Demande #26 : reprendre un trajet récent le calcule aussitôt', async () => {
+      simulerLocalStorage({
+        'gladys:accord-historique': JSON.stringify('accepte'),
+        'gladys:trajets-recents': JSON.stringify([
+          {
+            depart: { libelle: 'Lyon', latitude: 45.75, longitude: 4.85 },
+            arrivee: { libelle: 'Vienne', latitude: 45.52, longitude: 4.87 },
+            valideLe: '2026-11-16T10:00:00Z',
+          },
+        ]),
+      })
+      fetchSimule.mockResolvedValueOnce(reponseAvecVitesses()).mockResolvedValueOnce(reponseAvecVitesses())
+      const ecran = monter()
+      await boutonNomme(ecran, 'Reprendre le trajet de Lyon à Vienne').trigger('click')
+      await flushPromises()
+      expect(fetchSimule).toHaveBeenCalledTimes(2)
+      expect(ecran.find('#resume-trajet').text()).toContain('32 min')
+      ecran.unmount()
+    })
+
     it('Critères 1 et 2 : durée à 45 km/h au plus (30 sur la route lente), arrivée à côté', async () => {
       const ecran = monter()
       await calculerPuisPartirA(ecran, '08:00')
@@ -404,9 +563,9 @@ describe('Écran « Préparer mon trajet »', () => {
       await ecran.find('#vitesse-habituelle').setValue('60')
       expect(ecran.text()).toContain('Indiquez une vitesse entre 10 et 45 km/h, par exemple 40.')
       const descriptions = ecran.find('#vitesse-habituelle').attributes('aria-describedby')!.split(' ')
-      expect(descriptions.map((idDescription) => document.getElementById(idDescription)?.textContent).join(' ')).toContain(
-        'Indiquez une vitesse entre 10 et 45 km/h',
-      )
+      expect(
+        descriptions.map((idDescription) => document.getElementById(idDescription)?.textContent).join(' '),
+      ).toContain('Indiquez une vitesse entre 10 et 45 km/h')
       expect(duree(ecran).text()).toContain('Durée estimée32 min')
       ecran.unmount()
     })
@@ -427,7 +586,8 @@ describe('Écran « Préparer mon trajet »', () => {
       attributes: {
         insee_commune_gauche: codeCommune,
         vitesse_moyenne_vl: 80,
-        cpx_numero: numero, nom_1_gauche: nomDeRue,
+        cpx_numero: numero,
+        nom_1_gauche: nomDeRue,
         importance,
       },
     })
@@ -454,7 +614,9 @@ describe('Écran « Préparer mon trajet »', () => {
       await preparerTrajet(ecran, 'Lyon', 'Vienne')
       fetchSimule.mockImplementation((adresse) => {
         if (adresse.includes('/navigation/')) {
-          return Promise.resolve(adresse.includes(encodeURIComponent(EVITEMENT_FORT_TRAFIC)) ? parLesVillages() : plusCourt())
+          return Promise.resolve(
+            adresse.includes(encodeURIComponent(EVITEMENT_FORT_TRAFIC)) ? parLesVillages() : plusCourt(),
+          )
         }
         const nom = nomsDesCommunes[new URL(adresse).pathname.split('/').pop() ?? '']
         return Promise.resolve(nom ? new Response(JSON.stringify({ nom })) : new Response('{}', { status: 404 }))
@@ -463,14 +625,19 @@ describe('Écran « Préparer mon trajet »', () => {
       await flushPromises()
     }
 
-    const etapes = (ecran: Ecran) => ecran.findAll('#etapes-trajet li').map((etape) => etape.text().replace(/\s+/g, ' '))
+    const etapes = (ecran: Ecran) =>
+      ecran.findAll('#etapes-trajet li').map((etape) => etape.text().replace(/\s+/g, ' '))
     const comparaison = (ecran: Ecran) => ecran.find('#comparaison-trajet')
 
     it('Critère 1 : liste écrite des étapes, dans l’ordre (village, route, distance)', async () => {
       const ecran = monter()
       await calculerAvecEtapes(ecran)
       expect(ecran.find('#etapes-trajet').element.tagName).toBe('OL')
-      expect(etapes(ecran)).toEqual(['Vienne — Rue de la Gare — 0,5 km', 'Vienne — C3 — 3 km', 'Les Abrets — C5 — 9 km'])
+      expect(etapes(ecran)).toEqual([
+        'Vienne — Rue de la Gare — 0,5 km',
+        'Vienne — C3 — 3 km',
+        'Les Abrets — C5 — 9 km',
+      ])
       ecran.unmount()
     })
 
@@ -487,13 +654,16 @@ describe('Écran « Préparer mon trajet »', () => {
       const ecran = monter()
       await preparerTrajet(ecran, 'Lyon', 'Vienne')
       // Le plus court passe par la D502, ici calme (importance 4) : il est retenu, sans fort trafic.
-      const plusCourtCalme = () =>
-        reponseIgn([troncon(4000, '38544', 'D502', '', '4'), troncon(6000, '38001', 'C3')])
+      const plusCourtCalme = () => reponseIgn([troncon(4000, '38544', 'D502', '', '4'), troncon(6000, '38001', 'C3')])
       fetchSimule.mockImplementation((adresse) =>
         Promise.resolve(
           adresse.includes('/navigation/')
             ? plusCourtCalme()
-            : new Response(JSON.stringify({ nom: nomsDesCommunes[new URL(adresse).pathname.split('/').pop() ?? ''] })),
+            : new Response(
+                JSON.stringify({
+                  nom: nomsDesCommunes[new URL(adresse).pathname.split('/').pop() ?? ''],
+                }),
+              ),
         ),
       )
       await boutonNomme(ecran, 'Calculer mon itinéraire').trigger('click')
@@ -546,7 +716,8 @@ describe('Écran « Préparer mon trajet »', () => {
 
   describe('Demande #18 : essayer OpenStreetMap pour le calcul du trajet', () => {
     const choixDuCalculateur = (ecran: Ecran) => ecran.find('input[name="calculateur"][value="openstreetmap"]')
-    const etapes = (ecran: Ecran) => ecran.findAll('#etapes-trajet li').map((etape) => etape.text().replace(/\s+/g, ' '))
+    const etapes = (ecran: Ecran) =>
+      ecran.findAll('#etapes-trajet li').map((etape) => etape.text().replace(/\s+/g, ' '))
 
     const parLesVillages: TrajetsSimules = {
       plusCourt: [{ kilometres: 4, classe: 'primary', noms: ['D 974'], codeCommune: '21231' }],

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   EVITEMENT_FORT_TRAFIC,
   INTERDICTION_AUTOROUTES,
+  INTERDICTION_VOIES_SANS_CIRCULATION,
   ROUTE_SANS_NOM,
   calculerItineraire,
   choisirItineraire,
@@ -47,6 +48,21 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
     expect(fetchSimule.mock.calls.some(([adresse]) => adresse.includes(encodeURIComponent(EVITEMENT_FORT_TRAFIC)))).toBe(
       true,
     )
+  })
+
+  it('ne passe jamais par un chemin, une allée ou une voie privée (chez le voisin)', async () => {
+    fetchSimule.mockImplementation(() => Promise.resolve(reponseIgn([{ numero: '', metres: 10000 }])))
+    await calculerItineraire(lyon, vienne, 30)
+    for (const [adresse] of fetchSimule.mock.calls) {
+      const parametres = new URL(adresse).searchParams
+      expect(parametres.get('constraints')!.split('|')).toContain(INTERDICTION_VOIES_SANS_CIRCULATION)
+    }
+    expect(JSON.parse(INTERDICTION_VOIES_SANS_CIRCULATION)).toEqual({
+      constraintType: 'banned',
+      key: 'importance',
+      operator: '>',
+      value: 5,
+    })
   })
 
   it('compte les kilomètres sur départementale d’après le numéro de route', async () => {

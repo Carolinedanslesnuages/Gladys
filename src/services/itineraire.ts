@@ -18,6 +18,17 @@ export const INTERDICTION_AUTOROUTES = JSON.stringify({
 })
 
 /**
+ * Jamais par un chemin, une allée ou une voie privée (importance BD TOPO 6, « sans circulation ») :
+ * le trajet ne traverse pas la propriété d'un voisin, et part de la vraie rue la plus proche.
+ */
+export const INTERDICTION_VOIES_SANS_CIRCULATION = JSON.stringify({
+  constraintType: 'banned',
+  key: 'importance',
+  operator: '>',
+  value: 5,
+})
+
+/**
  * Importance BD TOPO (1 : liaison nationale … 6 : sans circulation) à partir de laquelle une
  * route est calme : 4 (liaison locale) et au-delà. De 1 à 3, le trafic est fort (ex. : la D930).
  */
@@ -279,8 +290,12 @@ export function choisirItineraire(
 /** Itinéraire sans autoroute ni voie rapide, qui évite les départementales à fort trafic dans la limite du seuil. */
 export async function calculerItineraire(depart: Lieu, arrivee: Lieu, seuilDetourPourcent: number): Promise<ResultatItineraire> {
   const [plusCourt, evitantDepartementales] = await Promise.all([
-    demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES]),
-    demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES, EVITEMENT_FORT_TRAFIC]),
+    demanderItineraire(depart, arrivee, [INTERDICTION_AUTOROUTES, INTERDICTION_VOIES_SANS_CIRCULATION]),
+    demanderItineraire(depart, arrivee, [
+      INTERDICTION_AUTOROUTES,
+      INTERDICTION_VOIES_SANS_CIRCULATION,
+      EVITEMENT_FORT_TRAFIC,
+    ]),
   ])
   const resultat = choisirItineraire(plusCourt, evitantDepartementales, seuilDetourPourcent)
   return avecLesEtapesDuTrajetRetenu(resultat, await nommerLesVillages(resultat.itineraire.etapes))

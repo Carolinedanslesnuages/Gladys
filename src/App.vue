@@ -2,28 +2,15 @@
 import { RouterView } from 'vue-router'
 import EtatConnexion from '@/components/EtatConnexion.vue'
 import MiseAJour from '@/components/MiseAJour.vue'
-
-const logoText = ['République', 'Française']
-const liensRapides = [
-  { label: 'Préparer mon trajet', to: '/', icon: 'fr-icon-road-map-line' },
-  { label: 'Relevés', to: '/releves', icon: 'fr-icon-file-text-line' },
-]
 </script>
 
 <template>
-  <DsfrHeader
-    service-title="Sans permis, en toute sécurité"
-    :logo-text="logoText"
-    :quick-links="liensRapides"
-    home-to="/"
-    operator-img-src="/logo-gladys.svg"
-    operator-img-alt="Gladys"
-    :operator-img-style="{ width: '7.75rem', height: '3rem' }"
-  />
+  <!-- Application mobile : ni en-tête ni pied de page de site, la carte prend tout l'écran.
+       La marque de l'État et les informations légales sont dans le panneau « À propos »
+       (bouton « Menu », docs/adr/0011-application-sans-en-tete-ni-pied-de-page.md). -->
   <EtatConnexion />
   <MiseAJour />
-  <main id="contenu" class="fr-container fr-my-6w">
+  <main id="contenu">
     <RouterView />
   </main>
-  <DsfrFooter :logo-text="logoText" />
 </template>
