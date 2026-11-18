@@ -4,12 +4,16 @@
  * et « Arrivée ». Déplaçable et zoomable aux doigts, au clavier (flèches, + et −) et par deux
  * boutons. Sans réseau, le fond de carte est indisponible : un message le dit. La liste des étapes,
  * affichée sous la carte, en reste l'alternative écrite. Décision : docs/adr/0006-carte-du-trajet.md.
+ * Pendant le trajet, la carte peut suivre la position de la personne, comme un GPS : repère « Vous »,
+ * distance restante, alerte si elle quitte le trajet. Décision : docs/adr/0008-guidage-sur-la-carte.md.
  */
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import Leaflet from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Lieu } from '@/services/adresses'
 import type { PointDuTrace } from '@/services/itineraire'
+import { PositionRefusee, suivrePosition, type Coordonnees } from '@/services/position'
+import { avancementSurLeTrace } from '@/services/guidage'
 
 const props = defineProps<{ trace: PointDuTrace[]; depart: Lieu; arrivee: Lieu; enLigne: boolean }>()
 
@@ -53,6 +57,7 @@ function creerCarte(conteneur: HTMLElement): void {
 }
 
 function retirerCarte(): void {
+  arreterLeSuivi()
   carte?.remove()
   carte = null
 }
@@ -70,7 +75,68 @@ onUnmounted(retirerCarte)
 const zoomer = () => carte?.zoomIn(1, { animate: !animationsReduites() })
 const dezoomer = () => carte?.zoomOut(1, { animate: !animationsReduites() })
 
-const nomDeLaCarte = () => `Carte du trajet de ${props.depart.libelle} à ${props.arrivee.libelle}`
+// Suivi de la position pendant le trajet (comme un GPS). La position reste sur l'appareil.
+/** Zoom du suivi : on lit le nom des rues autour de soi. */
+const ZOOM_DU_SUIVI = 16
+const suiviActif = ref(false)
+const positionSuivie = ref<Coordonnees | null>(null)
+const messageDuSuivi = ref('')
+const erreurDuSuivi = ref('')
+let arreterLaGeolocalisation: (() => void) | null = null
+let repereDeLaPersonne: Leaflet.Marker | null = null
+
+const avancement = computed(() => (positionSuivie.value ? avancementSurLeTrace(positionSuivie.value, props.trace) : null))
+
+const enDistanceLisible = (metres: number) =>
+  metres < 1000
+    ? `${Math.round(metres / 10) * 10} m`
+    : `${(metres / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`
+
+function placerLaPersonne(coordonnees: Coordonnees): void {
+  if (!carte) return
+  const premierePosition = positionSuivie.value === null
+  positionSuivie.value = coordonnees
+  const point = Leaflet.latLng(coordonnees.latitude, coordonnees.longitude)
+  if (repereDeLaPersonne) repereDeLaPersonne.setLatLng(point)
+  else
+    repereDeLaPersonne = Leaflet.marker(point, {
+      icon: repere('Vous'),
+      interactive: false,
+      keyboard: false,
+      zIndexOffset: 1000,
+    }).addTo(carte)
+  carte.setView(point, premierePosition ? ZOOM_DU_SUIVI : carte.getZoom(), { animate: !animationsReduites() })
+  if (premierePosition) messageDuSuivi.value = 'Position trouvée : la carte vous suit.'
+}
+
+function signalerErreurDuSuivi(erreur: Error): void {
+  arreterLeSuivi()
+  erreurDuSuivi.value =
+    erreur instanceof PositionRefusee
+      ? 'Position refusée : autorisez la localisation pour GLADYS dans les réglages du téléphone.'
+      : 'Votre position est introuvable pour le moment. Réessayez dans un endroit dégagé.'
+}
+
+function demarrerLeSuivi(): void {
+  erreurDuSuivi.value = ''
+  messageDuSuivi.value = 'Recherche de votre position…'
+  suiviActif.value = true
+  arreterLaGeolocalisation = suivrePosition(placerLaPersonne, signalerErreurDuSuivi)
+}
+
+function arreterLeSuivi(): void {
+  arreterLaGeolocalisation?.()
+  arreterLaGeolocalisation = null
+  repereDeLaPersonne?.remove()
+  repereDeLaPersonne = null
+  if (suiviActif.value) messageDuSuivi.value = 'La carte ne suit plus votre position.'
+  suiviActif.value = false
+  positionSuivie.value = null
+}
+
+const basculerLeSuivi = () => (suiviActif.value ? arreterLeSuivi() : demarrerLeSuivi())
+
+const nomDeLaCarte =() => `Carte du trajet de ${props.depart.libelle} à ${props.arrivee.libelle}`
 </script>
 
 <template>
@@ -84,6 +150,30 @@ const nomDeLaCarte = () => `Carte du trajet de ${props.depart.libelle} à ${prop
     />
   </div>
   <template v-if="enLigne">
+    <DsfrButton
+      type="button"
+      size="lg"
+      class="fr-mb-1w"
+      :icon="suiviActif ? 'fr-icon-close-circle-line' : 'fr-icon-map-pin-2-line'"
+      :label="suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'"
+      @click="basculerLeSuivi"
+    />
+    <p class="fr-text--sm fr-mb-1w">
+      Votre position reste sur ce téléphone. Gardez les yeux sur la route : regardez la carte seulement à l’arrêt.
+    </p>
+    <p id="annonce-suivi" role="status" class="fr-sr-only">{{ messageDuSuivi }}</p>
+    <DsfrAlert v-if="erreurDuSuivi" type="error" small class="fr-mb-2w" :description="erreurDuSuivi" />
+    <div v-if="avancement" id="avancement-trajet" class="fr-mb-2w">
+      <p class="fr-text--lg fr-mb-1w">
+        <strong>Il vous reste {{ enDistanceLisible(avancement.distanceRestanteMetres) }}</strong> jusqu’à l’arrivée.
+      </p>
+      <DsfrAlert
+        v-if="avancement.horsDuTrajet"
+        type="warning"
+        small
+        :description="`Vous êtes à ${enDistanceLisible(avancement.ecartAuTrajetMetres)} du trajet prévu. Rejoignez-le dès que possible, ou calculez un nouvel itinéraire.`"
+      />
+    </div>
     <p id="aide-carte" class="fr-text--sm fr-mb-1w">
       Déplacez la carte avec le doigt ou les flèches du clavier. Zoomez avec les boutons, ou les touches + et −.
     </p>

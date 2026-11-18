@@ -36,3 +36,24 @@ export function positionActuelle(): Promise<Coordonnees> {
     )
   })
 }
+
+/**
+ * Suit la position de l'appareil pendant le trajet : `surPosition` reçoit chaque nouvelle position.
+ * Elle reste sur l'appareil. Renvoie la fonction qui arrête le suivi.
+ */
+export function suivrePosition(
+  surPosition: (coordonnees: Coordonnees) => void,
+  surErreur: (erreur: PositionRefusee | PositionIndisponible) => void,
+): () => void {
+  if (!('geolocation' in navigator)) {
+    surErreur(new PositionIndisponible())
+    return () => {}
+  }
+  const numeroDeSuivi = navigator.geolocation.watchPosition(
+    (position) => surPosition({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+    (erreurPosition) =>
+      surErreur(erreurPosition.code === CODE_PERMISSION_REFUSEE ? new PositionRefusee() : new PositionIndisponible()),
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
+  )
+  return () => navigator.geolocation.clearWatch(numeroDeSuivi)
+}
