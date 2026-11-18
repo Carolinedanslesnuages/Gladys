@@ -53,6 +53,40 @@ const confirmationEffacement = ref(false)
 const titreQuestionAccord = ref<HTMLElement | null>(null)
 const questionEffacement = ref<HTMLElement | null>(null)
 const titreTrajetsRecents = ref<HTMLElement | null>(null)
+const titreItineraire = ref<HTMLElement | null>(null)
+
+// Accueil comme une application de navigation (docs/adr/0010-accueil-carte-plein-ecran.md) :
+// la carte remplit l'écran sous l'en-tête, la barre « Où allez-vous ? » est posée dessus.
+const ecranCarte = ref<HTMLElement | null>(null)
+const barreDestination = ref<HTMLFormElement | null>(null)
+/** Le départ est la position actuelle, tant que la personne n'en choisit pas un autre. */
+const departDepuisMaPosition = ref(true)
+/** Barre touchée (focus dedans) : les trajets récents s'affichent dessous. */
+const barreOuverte = ref(false)
+const AUCUN_TRACE: never[] = []
+const traceSurLaCarte = computed(() => resultat.value?.itineraire.trace ?? AUCUN_TRACE)
+
+/** Hauteur de la carte : tout l'écran, moins ce qui est au-dessus (en-tête, bandeaux). */
+function ajusterLaHauteurDeLaCarte(): void {
+  if (!ecranCarte.value) return
+  const hautDeLaCarte = ecranCarte.value.getBoundingClientRect().top + window.scrollY
+  ecranCarte.value.style.setProperty('--haut-ecran-carte', `${Math.max(0, hautDeLaCarte)}px`)
+}
+
+function fermerLaBarreSiLeFocusSort(evenement: FocusEvent): void {
+  if (!barreDestination.value?.contains(evenement.relatedTarget as Node | null)) barreOuverte.value = false
+}
+const ouvrirLaBarre = () => (barreOuverte.value = true)
+/** Échap referme ce qui s'est ouvert sous la barre (RGAA 10.13). */
+const fermerLaBarreAvecEchap = (evenement: KeyboardEvent) => {
+  if (evenement.key === 'Escape') barreOuverte.value = false
+}
+// Écoutés sur la barre entière : le focus et les touches viennent de ses champs et boutons.
+onMounted(() => {
+  barreDestination.value?.addEventListener('focusin', ouvrirLaBarre)
+  barreDestination.value?.addEventListener('focusout', fermerLaBarreSiLeFocusSort)
+  barreDestination.value?.addEventListener('keydown', fermerLaBarreAvecEchap)
+})
 
 // Réseau : la recherche d'adresse et la position en ont besoin, pas les trajets récents.
 const enLigne = ref(navigator.onLine)
@@ -60,10 +94,13 @@ const suivreLeReseau = () => (enLigne.value = navigator.onLine)
 onMounted(() => {
   window.addEventListener('online', suivreLeReseau)
   window.addEventListener('offline', suivreLeReseau)
+  window.addEventListener('resize', ajusterLaHauteurDeLaCarte)
+  ajusterLaHauteurDeLaCarte()
 })
 onUnmounted(() => {
   window.removeEventListener('online', suivreLeReseau)
   window.removeEventListener('offline', suivreLeReseau)
+  window.removeEventListener('resize', ajusterLaHauteurDeLaCarte)
 })
 
 // Un itinéraire calculé ne vaut que pour le départ et l'arrivée qui l'ont produit.
@@ -84,7 +121,13 @@ const annonceItineraire = computed(() => {
 
 // Durée et heure d'arrivée : recalculées sur l'appareil, même sans réseau.
 const magasinDuree = useDureeStore()
-const { vitesseHabituelle, heureDepart, dureeMinutes, dureePlusCourtMinutes, erreur: erreurDuree } = storeToRefs(magasinDuree)
+const {
+  vitesseHabituelle,
+  heureDepart,
+  dureeMinutes,
+  dureePlusCourtMinutes,
+  erreur: erreurDuree,
+} = storeToRefs(magasinDuree)
 const vitesseSaisie = ref(String(vitesseHabituelle.value))
 const erreurVitesse = ref('')
 const heureMaintenant = () => {
@@ -133,7 +176,10 @@ const ecartDeDistance = (metresRetenu: number, metresPlusCourt: number) => {
 const comparaison = computed(() => {
   if (!resultat.value || dureeMinutes.value === null || dureePlusCourtMinutes.value === null) return null
   if (resultat.value.retenuEstLePlusCourt) {
-    return { dejaLePlusCourt: true, annonce: 'Votre trajet est déjà le trajet le plus court sans autoroute.' }
+    return {
+      dejaLePlusCourt: true,
+      annonce: 'Votre trajet est déjà le trajet le plus court sans autoroute.',
+    }
   }
   const plusCourt = {
     distance: enKilometres(resultat.value.plusCourt.distanceMetres),
@@ -158,7 +204,25 @@ async function calculerMonItineraire(): Promise<void> {
 
 const descriptionTrajet = (lieuDepart: Lieu, lieuArrivee: Lieu) => `de ${lieuDepart.libelle} à ${lieuArrivee.libelle}`
 
+/** « Ma position » : revenir au départ par défaut, la position actuelle. */
 async function utiliserMaPosition(): Promise<void> {
+  departDepuisMaPosition.value = true
+  depart.value = null
+  erreurDepart.value = ''
+  annonce.value = 'Départ : votre position actuelle.'
+  await nextTick()
+  document.getElementById('bouton-depart-ma-position')?.focus()
+}
+
+/** Toucher « Ma position » ouvre le champ « Départ » pour en choisir un autre. */
+async function changerDeDepart(): Promise<void> {
+  departDepuisMaPosition.value = false
+  await nextTick()
+  document.getElementById('depart')?.focus()
+}
+
+/** Cherche l'adresse de la position actuelle ; en cas d'échec, le champ « Départ » s'ouvre avec l'explication. */
+async function trouverMonDepart(): Promise<void> {
   erreurDepart.value = ''
   positionEnCours.value = true
   annonce.value = 'Recherche de votre position…'
@@ -185,15 +249,23 @@ async function utiliserMaPosition(): Promise<void> {
   } finally {
     positionEnCours.value = false
   }
+  if (erreurDepart.value) departDepuisMaPosition.value = false
 }
 
 async function validerTrajet(): Promise<void> {
-  erreurDepart.value = depart.value ? '' : 'Choisissez votre départ dans la liste des propositions.'
   erreurArrivee.value = arrivee.value ? '' : 'Choisissez votre arrivée dans la liste des propositions.'
-  if (!depart.value || !arrivee.value) {
-    document.getElementById(depart.value ? 'arrivee' : 'depart')?.focus()
+  if (!arrivee.value) {
+    document.getElementById('arrivee')?.focus()
     return
   }
+  if (departDepuisMaPosition.value) await trouverMonDepart()
+  else erreurDepart.value = depart.value ? '' : 'Choisissez votre départ dans la liste des propositions.'
+  if (!depart.value) {
+    await nextTick()
+    document.getElementById('depart')?.focus()
+    return
+  }
+  barreOuverte.value = false
   annonce.value = `Trajet prêt : ${descriptionTrajet(depart.value, arrivee.value)}.`
   if (accord.value === null) {
     trajetEnAttenteDAccord.value = { depart: depart.value, arrivee: arrivee.value }
@@ -202,7 +274,13 @@ async function validerTrajet(): Promise<void> {
     return
   }
   magasinTrajets.retenirTrajet(depart.value, arrivee.value)
+  // La suite (calcul, durée, étapes) est sous la carte : on y emmène la personne.
+  await nextTick()
+  titreItineraire.value?.focus()
 }
+
+/** Revenir sur la carte, en haut de l'écran, depuis le détail du trajet. */
+const voirLaCarte = () => document.getElementById('carte-trajet')?.focus()
 
 async function repondreAccord(choix: 'accepte' | 'refuse'): Promise<void> {
   magasinTrajets.choisirAccord(choix)
@@ -219,6 +297,8 @@ async function repondreAccord(choix: 'accepte' | 'refuse'): Promise<void> {
 }
 
 function reprendre(trajet: Trajet): void {
+  departDepuisMaPosition.value = false
+  barreOuverte.value = false
   depart.value = trajet.depart
   arrivee.value = trajet.arrivee
   erreurDepart.value = ''
@@ -244,241 +324,382 @@ async function effacer(confirme: boolean): Promise<void> {
 </script>
 
 <template>
-  <h1>Préparer mon trajet</h1>
-  <p>Indiquez d’où vous partez et où vous allez. Les champs marqués d’un astérisque (*) sont obligatoires.</p>
+  <h1 class="fr-sr-only">Préparer mon trajet</h1>
 
-  <DsfrAlert
-    v-if="!enLigne"
-    type="info"
-    small
-    class="fr-mb-3w"
-    description="Sans réseau, la recherche d’adresse et la position actuelle sont indisponibles. Vos trajets récents restent utilisables."
-  />
+  <div ref="ecranCarte" class="ecran-carte">
+    <!-- Avant la carte dans la page : au clavier, on arrive d'abord sur « Où allez-vous ? ». -->
+    <form
+      id="barre-destination"
+      ref="barreDestination"
+      role="search"
+      aria-label="Où allez-vous ?"
+      novalidate
+      class="barre-destination"
+      @submit.prevent="validerTrajet"
+    >
+      <ChampLieu
+        id="arrivee"
+        v-model="arrivee"
+        label="Où allez-vous ?"
+        indication="Obligatoire. Une adresse ou une commune, puis choisissez dans la liste"
+        :en-ligne="enLigne"
+        :erreur-externe="erreurArrivee"
+      >
+        <template #sans-saisie>
+          <!-- mousedown sans effet : le focus reste dans la barre pendant qu'on touche un trajet. -->
+          <div
+            v-if="barreOuverte && accord === 'accepte' && trajetsRecents.length > 0"
+            id="trajets-sous-la-barre"
+            class="fr-mt-1w"
+            @mousedown.prevent
+          >
+            <p id="titre-trajets-sous-la-barre" class="fr-text--sm fr-text--bold fr-mb-1v">Mes trajets récents</p>
+            <ul class="fr-p-0 fr-m-0 trajets-recents" aria-labelledby="titre-trajets-sous-la-barre">
+              <li v-for="trajet in trajetsRecents" :key="trajet.valideLe">
+                <DsfrButton
+                  type="button"
+                  tertiary
+                  no-outline
+                  size="lg"
+                  icon="fr-icon-time-line"
+                  class="trajet-recent-sous-la-barre"
+                  :label="`De ${trajet.depart.libelle} à ${trajet.arrivee.libelle}`"
+                  :aria-label="`Reprendre le trajet ${descriptionTrajet(trajet.depart, trajet.arrivee)}`"
+                  @click="reprendre(trajet)"
+                />
+              </li>
+            </ul>
+          </div>
+        </template>
+      </ChampLieu>
 
-  <form novalidate class="fr-mb-4w" @submit.prevent="validerTrajet">
-    <ChampLieu id="depart" v-model="depart" label="Départ" :en-ligne="enLigne" :erreur-externe="erreurDepart" />
-    <DsfrButton
-      type="button"
-      secondary
-      size="lg"
-      icon="fr-icon-map-pin-2-line"
-      class="fr-mb-4w"
-      :label="positionEnCours ? 'Recherche de votre position…' : 'Utiliser ma position actuelle'"
-      :disabled="!enLigne || positionEnCours"
-      @click="utiliserMaPosition"
-    />
-    <ChampLieu id="arrivee" v-model="arrivee" label="Arrivée" :en-ligne="enLigne" :erreur-externe="erreurArrivee" />
-    <DsfrButton type="submit" size="lg" label="Valider mon trajet" icon="fr-icon-check-line" />
-  </form>
-
-  <p id="annonce-trajet" role="status" class="fr-sr-only">{{ annonce }}</p>
-
-  <section v-if="depart && arrivee" class="fr-mb-4w" aria-labelledby="titre-itineraire">
-    <h2 id="titre-itineraire" class="fr-h5">Mon itinéraire</h2>
-    <p>Il ne passe jamais par une autoroute ni une voie rapide.</p>
-    <DsfrRadioButtonSet
-      name="seuil-detour"
-      legend="Détour accepté pour éviter les routes à fort trafic"
-      hint="Les départementales calmes restent permises. Votre choix reste gardé sur ce téléphone."
-      :model-value="seuilDetour"
-      :options="optionsDeDetour"
-      @update:model-value="(nouveauSeuil: string | number | boolean | undefined) => magasinItineraire.choisirSeuil(Number(nouveauSeuil))"
-    />
-    <DsfrRadioButtonSet
-      name="calculateur"
-      legend="Calculateur d’itinéraire"
-      hint="Votre choix reste gardé sur ce téléphone."
-      :model-value="calculateur"
-      :options="optionsDeCalculateur"
-      @update:model-value="
-        (nouveauCalculateur: string | number | boolean | undefined) =>
-          magasinItineraire.choisirCalculateur(nouveauCalculateur === 'openstreetmap' ? 'openstreetmap' : 'ign')
-      "
-    />
-    <p v-if="!enLigne" class="fr-mb-2w">Le calcul d’itinéraire a besoin du réseau. Il sera possible dès son retour.</p>
-    <DsfrButton
-      type="button"
-      size="lg"
-      icon="fr-icon-road-map-line"
-      :label="calculEnCours ? 'Calcul de votre itinéraire…' : 'Calculer mon itinéraire'"
-      :disabled="!enLigne || calculEnCours"
-      @click="calculerMonItineraire"
-    />
-
-    <div id="resultat-itineraire" role="status" class="fr-mt-3w">
-      <DsfrAlert v-if="erreurItineraire" type="error" small :description="erreurItineraire" />
-      <template v-if="resultat">
-        <DsfrAlert
-          v-if="!resultat.sansDepartementalePossible"
-          type="warning"
-          small
-          class="fr-mb-2w"
-          description="Aucun itinéraire sans route à fort trafic n’existe pour ce trajet. Voici le trajet le plus sûr, avec le moins de fort trafic possible."
+      <p v-if="departDepuisMaPosition" class="ligne-depart fr-mb-0">
+        <span>Départ :</span>
+        <DsfrButton
+          id="bouton-depart-ma-position"
+          type="button"
+          tertiary
+          no-outline
+          icon="fr-icon-map-pin-2-line"
+          class="bouton-barre"
+          :label="positionEnCours ? 'Recherche de votre position…' : 'Ma position'"
+          :aria-label="positionEnCours ? 'Recherche de votre position…' : 'Départ : Ma position. Changer le départ'"
+          :disabled="positionEnCours"
+          @click="changerDeDepart"
         />
-        <DsfrAlert
-          v-else-if="resultat.detourTropLong"
-          type="info"
-          small
-          class="fr-mb-2w"
-          :description="`Un trajet sans route à fort trafic existe, mais son détour dépasse ${seuilDetour} %. Voici le trajet le plus court sans autoroute.`"
-        />
-        <dl class="fr-mb-0">
-          <dt>Distance totale</dt>
-          <dd>{{ enKilometres(resultat.itineraire.distanceMetres) }}</dd>
-          <dt>Sur route à fort trafic</dt>
-          <dd v-if="resultat.itineraire.departementaleFortTraficMetres > 0">
-            {{ enKilometres(resultat.itineraire.departementaleFortTraficMetres) }}
-          </dd>
-          <dd v-else>Aucun kilomètre : trajet sans route à fort trafic</dd>
-          <dt>Calculé avec</dt>
-          <dd v-if="calculateurDuResultat === 'openstreetmap'">OpenStreetMap (© les contributeurs d’OpenStreetMap)</dd>
-          <dd v-else>IGN</dd>
-        </dl>
-      </template>
-      <p class="fr-sr-only">{{ annonceItineraire }}</p>
-    </div>
-
-    <template v-if="horairesEstimes">
-      <h3 class="fr-h6 fr-mt-3w">Mon temps de trajet</h3>
-      <dl id="duree-trajet" class="fr-mb-2w duree-et-arrivee">
-        <div>
-          <dt>Durée estimée</dt>
-          <dd>{{ horairesEstimes.duree }}</dd>
-        </div>
-        <div>
-          <dt>Arrivée estimée</dt>
-          <dd>vers {{ horairesEstimes.arrivee }}</dd>
-        </div>
-      </dl>
-      <p id="annonce-duree" role="status" class="fr-sr-only">{{ annonceDuree }}</p>
-      <p class="fr-text--sm">
-        Calculée à {{ vitesseHabituelle.toLocaleString('fr-FR') }} km/h au plus, et moins vite si la route est plus lente.
       </p>
-      <DsfrInputGroup
-        id="vitesse-habituelle"
-        :model-value="vitesseSaisie"
-        label="Ma vitesse moyenne habituelle, en km/h"
-        label-visible
-        :hint="`Entre ${VITESSE_MINIMALE_KMH} et ${VITESSE_MAXIMALE_KMH} km/h. Elle reste gardée sur ce téléphone.`"
-        :error-message="erreurVitesse || erreurDuree || undefined"
-        type="text"
-        inputmode="decimal"
-        autocomplete="off"
-        @update:model-value="saisirVitesse"
+      <template v-else>
+        <ChampLieu id="depart" v-model="depart" label="Départ" :en-ligne="enLigne" :erreur-externe="erreurDepart" />
+        <DsfrButton
+          type="button"
+          tertiary
+          no-outline
+          icon="fr-icon-map-pin-2-line"
+          class="bouton-barre"
+          label="Utiliser ma position actuelle"
+          @click="utiliserMaPosition"
+        />
+      </template>
+      <DsfrButton
+        v-if="arrivee"
+        type="submit"
+        size="lg"
+        class="fr-mt-1w"
+        label="Valider mon trajet"
+        icon="fr-icon-check-line"
+        :disabled="positionEnCours"
       />
-      <DsfrInputGroup
-        id="heure-depart"
-        :model-value="heureDepart"
-        label="Mon heure de départ"
-        label-visible
-        hint="Par défaut : maintenant. Vide : départ maintenant."
-        type="time"
-        @update:model-value="(heureSaisie: string | number | undefined) => magasinDuree.choisirHeureDepart(String(heureSaisie ?? ''))"
+      <DsfrAlert
+        v-if="!enLigne"
+        type="info"
+        small
+        class="fr-mt-1w"
+        description="Sans réseau, la recherche d’adresse et la position actuelle sont indisponibles. Vos trajets récents restent utilisables."
       />
-    </template>
+    </form>
+    <CarteTrajet
+      :trace="traceSurLaCarte"
+      :depart="depart"
+      :arrivee="arrivee"
+      :en-ligne="enLigne"
+      suivre-des-l-ouverture
+    />
+  </div>
 
-    <template v-if="comparaison">
-      <h3 class="fr-h6 fr-mt-3w">Comparer avec le trajet le plus court</h3>
-      <div id="comparaison-trajet" class="fr-mb-2w">
-        <p v-if="comparaison.dejaLePlusCourt">{{ comparaison.annonce }}</p>
-        <dl v-else class="fr-mb-0">
-          <dt>Trajet le plus court sans autoroute</dt>
-          <dd>{{ comparaison.plusCourt?.distance }}, {{ comparaison.plusCourt?.duree }}</dd>
-          <dt>Votre trajet par rapport à lui</dt>
-          <dd>{{ comparaison.ecart }}</dd>
-        </dl>
-      </div>
-      <p id="annonce-comparaison" role="status" class="fr-sr-only">{{ comparaison.annonce }}</p>
-    </template>
+  <div class="fr-container fr-my-6w">
+    <p id="annonce-trajet" role="status" class="fr-sr-only">{{ annonce }}</p>
 
-    <template v-if="resultat && resultat.itineraire.trace.length >= 2">
-      <h3 class="fr-h6 fr-mt-3w">Mon trajet sur la carte</h3>
-      <CarteTrajet :trace="resultat.itineraire.trace" :depart="depart" :arrivee="arrivee" :en-ligne="enLigne" />
-    </template>
+    <section v-if="depart && arrivee" class="fr-mb-4w" aria-labelledby="titre-itineraire">
+      <h2 id="titre-itineraire" ref="titreItineraire" tabindex="-1" class="fr-h5">Mon itinéraire</h2>
+      <p>Il ne passe jamais par une autoroute ni une voie rapide.</p>
+      <DsfrRadioButtonSet
+        name="seuil-detour"
+        legend="Détour accepté pour éviter les routes à fort trafic"
+        hint="Les départementales calmes restent permises. Votre choix reste gardé sur ce téléphone."
+        :model-value="seuilDetour"
+        :options="optionsDeDetour"
+        @update:model-value="
+          (nouveauSeuil: string | number | boolean | undefined) => magasinItineraire.choisirSeuil(Number(nouveauSeuil))
+        "
+      />
+      <DsfrRadioButtonSet
+        name="calculateur"
+        legend="Calculateur d’itinéraire"
+        hint="Votre choix reste gardé sur ce téléphone."
+        :model-value="calculateur"
+        :options="optionsDeCalculateur"
+        @update:model-value="
+          (nouveauCalculateur: string | number | boolean | undefined) =>
+            magasinItineraire.choisirCalculateur(nouveauCalculateur === 'openstreetmap' ? 'openstreetmap' : 'ign')
+        "
+      />
+      <p v-if="!enLigne" class="fr-mb-2w">
+        Le calcul d’itinéraire a besoin du réseau. Il sera possible dès son retour.
+      </p>
+      <DsfrButton
+        type="button"
+        size="lg"
+        icon="fr-icon-road-map-line"
+        :label="calculEnCours ? 'Calcul de votre itinéraire…' : 'Calculer mon itinéraire'"
+        :disabled="!enLigne || calculEnCours"
+        @click="calculerMonItineraire"
+      />
 
-    <template v-if="resultat && resultat.itineraire.etapes.length > 0">
-      <h3 id="titre-etapes" class="fr-h6 fr-mt-3w">Les étapes de mon trajet</h3>
-      <ol id="etapes-trajet" class="etapes" aria-labelledby="titre-etapes">
-        <li v-for="(etape, rang) in resultat.itineraire.etapes" :key="rang" class="fr-mb-1w">
-          <strong>{{ etape.commune ?? 'Commune non précisée' }}</strong> — {{ etape.route }} —
-          {{ enKilometres(etape.distanceMetres) }}
-          <DsfrBadge
-            v-if="etape.fortTrafic"
-            :label="etape.departementale ? 'Départementale à fort trafic' : 'Grand axe à fort trafic'"
+      <div id="resultat-itineraire" role="status" class="fr-mt-3w">
+        <DsfrAlert v-if="erreurItineraire" type="error" small :description="erreurItineraire" />
+        <template v-if="resultat">
+          <DsfrAlert
+            v-if="!resultat.sansDepartementalePossible"
             type="warning"
             small
-            class="fr-ml-1w"
+            class="fr-mb-2w"
+            description="Aucun itinéraire sans route à fort trafic n’existe pour ce trajet. Voici le trajet le plus sûr, avec le moins de fort trafic possible."
           />
-          <DsfrBadge
-            v-else-if="etape.departementale"
-            label="Départementale calme"
+          <DsfrAlert
+            v-else-if="resultat.detourTropLong"
             type="info"
             small
-            class="fr-ml-1w"
+            class="fr-mb-2w"
+            :description="`Un trajet sans route à fort trafic existe, mais son détour dépasse ${seuilDetour} %. Voici le trajet le plus court sans autoroute.`"
           />
-        </li>
-      </ol>
-    </template>
-  </section>
-  <DsfrAlert v-if="erreurEnregistrement" type="error" small :description="erreurEnregistrement" class="fr-mb-2w" />
-
-  <section v-if="trajetEnAttenteDAccord" class="fr-mb-4w fr-p-3w question-accord" aria-labelledby="titre-accord">
-    <h2 id="titre-accord" ref="titreQuestionAccord" tabindex="-1" class="fr-h5">
-      Garder mes {{ NOMBRE_DE_TRAJETS_GARDES }} derniers trajets sur ce téléphone ?
-    </h2>
-    <p>
-      Vous pourrez les reprendre d’un geste, même sans réseau. Ils restent sur ce téléphone et vous pouvez les effacer à
-      tout moment.
-    </p>
-    <div class="fr-btns-group fr-btns-group--inline-sm">
-      <DsfrButton type="button" size="lg" label="Oui, garder mes trajets" @click="repondreAccord('accepte')" />
-      <DsfrButton type="button" size="lg" secondary label="Non, ne rien garder" @click="repondreAccord('refuse')" />
-    </div>
-  </section>
-
-  <h2 id="titre-trajets-recents" ref="titreTrajetsRecents" tabindex="-1" class="fr-h5">Mes trajets récents</h2>
-  <template v-if="accord === 'accepte'">
-    <p v-if="trajetsRecents.length === 0">Aucun trajet récent pour l’instant.</p>
-    <template v-else>
-      <ul class="fr-p-0 trajets-recents" aria-labelledby="titre-trajets-recents">
-        <li v-for="trajet in trajetsRecents" :key="trajet.valideLe" class="fr-mb-1w">
-          <DsfrButton
-            type="button"
-            tertiary
-            size="lg"
-            class="trajet-recent"
-            :label="`De ${trajet.depart.libelle} à ${trajet.arrivee.libelle}`"
-            :aria-label="`Reprendre le trajet ${descriptionTrajet(trajet.depart, trajet.arrivee)}`"
-            @click="reprendre(trajet)"
-          />
-        </li>
-      </ul>
-      <div v-if="confirmationEffacement">
-        <p ref="questionEffacement" tabindex="-1">Effacer tous vos trajets récents de ce téléphone ?</p>
-        <div class="fr-btns-group fr-btns-group--inline-sm">
-          <DsfrButton type="button" size="lg" label="Oui, effacer mes trajets récents" @click="effacer(true)" />
-          <DsfrButton type="button" size="lg" secondary label="Annuler" @click="effacer(false)" />
-        </div>
+          <dl class="fr-mb-0">
+            <dt>Distance totale</dt>
+            <dd>{{ enKilometres(resultat.itineraire.distanceMetres) }}</dd>
+            <dt>Sur route à fort trafic</dt>
+            <dd v-if="resultat.itineraire.departementaleFortTraficMetres > 0">
+              {{ enKilometres(resultat.itineraire.departementaleFortTraficMetres) }}
+            </dd>
+            <dd v-else>Aucun kilomètre : trajet sans route à fort trafic</dd>
+            <dt>Calculé avec</dt>
+            <!-- prettier-ignore -->
+            <dd v-if="calculateurDuResultat === 'openstreetmap'">OpenStreetMap (© les contributeurs d’OpenStreetMap)</dd>
+            <dd v-else>IGN</dd>
+          </dl>
+        </template>
+        <p class="fr-sr-only">{{ annonceItineraire }}</p>
       </div>
+
+      <template v-if="horairesEstimes">
+        <h3 class="fr-h6 fr-mt-3w">Mon temps de trajet</h3>
+        <dl id="duree-trajet" class="fr-mb-2w duree-et-arrivee">
+          <div>
+            <dt>Durée estimée</dt>
+            <dd>{{ horairesEstimes.duree }}</dd>
+          </div>
+          <div>
+            <dt>Arrivée estimée</dt>
+            <dd>vers {{ horairesEstimes.arrivee }}</dd>
+          </div>
+        </dl>
+        <p id="annonce-duree" role="status" class="fr-sr-only">{{ annonceDuree }}</p>
+        <p class="fr-text--sm">
+          Calculée à {{ vitesseHabituelle.toLocaleString('fr-FR') }} km/h au plus, et moins vite si la route est plus
+          lente.
+        </p>
+        <DsfrInputGroup
+          id="vitesse-habituelle"
+          :model-value="vitesseSaisie"
+          label="Ma vitesse moyenne habituelle, en km/h"
+          label-visible
+          :hint="`Entre ${VITESSE_MINIMALE_KMH} et ${VITESSE_MAXIMALE_KMH} km/h. Elle reste gardée sur ce téléphone.`"
+          :error-message="erreurVitesse || erreurDuree || undefined"
+          type="text"
+          inputmode="decimal"
+          autocomplete="off"
+          @update:model-value="saisirVitesse"
+        />
+        <DsfrInputGroup
+          id="heure-depart"
+          :model-value="heureDepart"
+          label="Mon heure de départ"
+          label-visible
+          hint="Par défaut : maintenant. Vide : départ maintenant."
+          type="time"
+          @update:model-value="
+            (heureSaisie: string | number | undefined) => magasinDuree.choisirHeureDepart(String(heureSaisie ?? ''))
+          "
+        />
+      </template>
+
+      <template v-if="comparaison">
+        <h3 class="fr-h6 fr-mt-3w">Comparer avec le trajet le plus court</h3>
+        <div id="comparaison-trajet" class="fr-mb-2w">
+          <p v-if="comparaison.dejaLePlusCourt">{{ comparaison.annonce }}</p>
+          <dl v-else class="fr-mb-0">
+            <dt>Trajet le plus court sans autoroute</dt>
+            <dd>{{ comparaison.plusCourt?.distance }}, {{ comparaison.plusCourt?.duree }}</dd>
+            <dt>Votre trajet par rapport à lui</dt>
+            <dd>{{ comparaison.ecart }}</dd>
+          </dl>
+        </div>
+        <p id="annonce-comparaison" role="status" class="fr-sr-only">{{ comparaison.annonce }}</p>
+      </template>
+
+      <template v-if="resultat && resultat.itineraire.trace.length >= 2">
+        <h3 class="fr-h6 fr-mt-3w">Mon trajet sur la carte</h3>
+        <p>
+          Il est tracé sur la carte, en haut de l’écran. Gardez les yeux sur la route : regardez la carte seulement à
+          l’arrêt.
+        </p>
+        <DsfrButton
+          type="button"
+          secondary
+          size="lg"
+          icon="fr-icon-road-map-line"
+          label="Voir mon trajet sur la carte"
+          @click="voirLaCarte"
+        />
+      </template>
+
+      <template v-if="resultat && resultat.itineraire.etapes.length > 0">
+        <h3 id="titre-etapes" class="fr-h6 fr-mt-3w">Les étapes de mon trajet</h3>
+        <ol id="etapes-trajet" class="etapes" aria-labelledby="titre-etapes">
+          <li v-for="(etape, rang) in resultat.itineraire.etapes" :key="rang" class="fr-mb-1w">
+            <strong>{{ etape.commune ?? 'Commune non précisée' }}</strong> — {{ etape.route }} —
+            {{ enKilometres(etape.distanceMetres) }}
+            <DsfrBadge
+              v-if="etape.fortTrafic"
+              :label="etape.departementale ? 'Départementale à fort trafic' : 'Grand axe à fort trafic'"
+              type="warning"
+              small
+              class="fr-ml-1w"
+            />
+            <DsfrBadge
+              v-else-if="etape.departementale"
+              label="Départementale calme"
+              type="info"
+              small
+              class="fr-ml-1w"
+            />
+          </li>
+        </ol>
+      </template>
+    </section>
+    <DsfrAlert v-if="erreurEnregistrement" type="error" small :description="erreurEnregistrement" class="fr-mb-2w" />
+
+    <section v-if="trajetEnAttenteDAccord" class="fr-mb-4w fr-p-3w question-accord" aria-labelledby="titre-accord">
+      <h2 id="titre-accord" ref="titreQuestionAccord" tabindex="-1" class="fr-h5">
+        Garder mes {{ NOMBRE_DE_TRAJETS_GARDES }} derniers trajets sur ce téléphone ?
+      </h2>
+      <p>
+        Vous pourrez les reprendre d’un geste, même sans réseau. Ils restent sur ce téléphone et vous pouvez les effacer
+        à tout moment.
+      </p>
+      <div class="fr-btns-group fr-btns-group--inline-sm">
+        <DsfrButton type="button" size="lg" label="Oui, garder mes trajets" @click="repondreAccord('accepte')" />
+        <DsfrButton type="button" size="lg" secondary label="Non, ne rien garder" @click="repondreAccord('refuse')" />
+      </div>
+    </section>
+
+    <h2 id="titre-trajets-recents" ref="titreTrajetsRecents" tabindex="-1" class="fr-h5">Mes trajets récents</h2>
+    <template v-if="accord === 'accepte'">
+      <p v-if="trajetsRecents.length === 0">Aucun trajet récent pour l’instant.</p>
+      <template v-else>
+        <ul class="fr-p-0 trajets-recents" aria-labelledby="titre-trajets-recents">
+          <li v-for="trajet in trajetsRecents" :key="trajet.valideLe" class="fr-mb-1w">
+            <DsfrButton
+              type="button"
+              tertiary
+              size="lg"
+              class="trajet-recent"
+              :label="`De ${trajet.depart.libelle} à ${trajet.arrivee.libelle}`"
+              :aria-label="`Reprendre le trajet ${descriptionTrajet(trajet.depart, trajet.arrivee)}`"
+              @click="reprendre(trajet)"
+            />
+          </li>
+        </ul>
+        <div v-if="confirmationEffacement">
+          <p ref="questionEffacement" tabindex="-1">Effacer tous vos trajets récents de ce téléphone ?</p>
+          <div class="fr-btns-group fr-btns-group--inline-sm">
+            <DsfrButton type="button" size="lg" label="Oui, effacer mes trajets récents" @click="effacer(true)" />
+            <DsfrButton type="button" size="lg" secondary label="Annuler" @click="effacer(false)" />
+          </div>
+        </div>
+        <DsfrButton
+          v-else
+          type="button"
+          secondary
+          size="lg"
+          icon="fr-icon-delete-line"
+          label="Effacer mes trajets récents"
+          @click="demanderEffacement"
+        />
+      </template>
+    </template>
+    <template v-else-if="accord === 'refuse'">
+      <p>Vos trajets ne sont pas gardés sur ce téléphone.</p>
       <DsfrButton
-        v-else
         type="button"
         secondary
         size="lg"
-        icon="fr-icon-delete-line"
-        label="Effacer mes trajets récents"
-        @click="demanderEffacement"
+        label="Garder désormais mes trajets récents"
+        @click="repondreAccord('accepte')"
       />
     </template>
-  </template>
-  <template v-else-if="accord === 'refuse'">
-    <p>Vos trajets ne sont pas gardés sur ce téléphone.</p>
-    <DsfrButton type="button" secondary size="lg" label="Garder désormais mes trajets récents" @click="repondreAccord('accepte')" />
-  </template>
-  <p v-else>Après votre premier trajet, nous vous demanderons si vous voulez garder vos trajets récents sur ce téléphone.</p>
+    <p v-else>
+      Après votre premier trajet, nous vous demanderons si vous voulez garder vos trajets récents sur ce téléphone.
+    </p>
+  </div>
 </template>
 
 <style scoped>
+/* La carte occupe tout l'écran sous l'en-tête ; on fait défiler pour le détail et le pied de page. */
+.ecran-carte {
+  position: relative;
+  height: calc(100vh - var(--haut-ecran-carte, 0px));
+  height: calc(100dvh - var(--haut-ecran-carte, 0px));
+  min-height: 20rem;
+}
+.barre-destination {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  right: 0.5rem;
+  z-index: 1100;
+  max-width: 36rem;
+  max-height: calc(100% - 1rem);
+  overflow-y: auto;
+  padding: 0.75rem 1rem;
+  background: var(--background-default-grey);
+  box-shadow: 0 2px 8px rgb(0 0 18 / 20%);
+}
+.barre-destination :deep(.fr-mb-3w) {
+  margin-bottom: 0.5rem !important;
+}
+.ligne-depart {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.25rem;
+}
+/* Cibles tactiles d'au moins 44 px. */
+.bouton-barre {
+  min-height: 2.75rem;
+}
+.trajet-recent-sous-la-barre {
+  width: 100%;
+  text-align: left;
+}
 dt {
   font-weight: 700;
 }

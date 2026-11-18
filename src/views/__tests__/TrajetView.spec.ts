@@ -25,6 +25,9 @@ const simulerPosition = (accordee: boolean) =>
         succes: (position: { coords: { latitude: number; longitude: number } }) => void,
         echec: (erreurPosition: { code: number }) => void,
       ) => (accordee ? succes({ coords: { latitude: 45.75, longitude: 4.85 } }) : echec({ code: 1 })),
+      // La carte d'accueil suit la position : ici, elle attend sans jamais la recevoir.
+      watchPosition: () => 1,
+      clearWatch: () => {},
     },
   })
 
@@ -48,7 +51,14 @@ async function choisirLieu(ecran: Ecran, idChamp: string, texte: string, libelle
   await boutonNomme(ecran, libelle).trigger('click')
 }
 
+/** Le départ est « Ma position » par défaut : le toucher ouvre le champ « Départ ». */
+async function ouvrirLeDepart(ecran: Ecran): Promise<void> {
+  await boutonNomme(ecran, 'Départ : Ma position. Changer le départ').trigger('click')
+  await flushPromises()
+}
+
 async function preparerTrajet(ecran: Ecran, depart: string, arrivee: string): Promise<void> {
+  await ouvrirLeDepart(ecran)
   await choisirLieu(ecran, 'depart', depart, depart)
   await choisirLieu(ecran, 'arrivee', arrivee, arrivee)
   await ecran.find('form').trigger('submit')
@@ -70,12 +80,86 @@ describe('Écran « Préparer mon trajet »', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     definirEnLigne(true)
+    Reflect.deleteProperty(navigator, 'geolocation')
     document.body.innerHTML = ''
+  })
+
+  describe('Demande #26 : accueil comme une application de navigation', () => {
+    it('la carte occupe l’écran dès l’arrivée, avec la seule barre « Où allez-vous ? » posée dessus', () => {
+      const ecran = monter()
+      expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe('Carte autour de ma position')
+      const barre = ecran.find('#barre-destination')
+      expect(barre.attributes('role')).toBe('search')
+      expect(barre.attributes('aria-label')).toBe('Où allez-vous ?')
+      expect(ecran.find('label[for="arrivee"]').text()).toContain('Où allez-vous ?')
+      // La barre vient avant la carte : au clavier, on y arrive en premier.
+      const carte = ecran.find('#carte-trajet').element
+      expect(barre.element.compareDocumentPosition(carte) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(ecran.find('#depart').exists()).toBe(false)
+      expect(ecran.findAll('h1')).toHaveLength(1)
+      ecran.unmount()
+    })
+
+    it('le départ est « Ma position » ; le toucher permet d’en choisir un autre, puis d’y revenir', async () => {
+      const ecran = monter()
+      await ouvrirLeDepart(ecran)
+      expect(document.activeElement?.id).toBe('depart')
+      await boutonNomme(ecran, 'Utiliser ma position actuelle').trigger('click')
+      await flushPromises()
+      expect(ecran.find('#depart').exists()).toBe(false)
+      expect(document.activeElement?.id).toBe('bouton-depart-ma-position')
+      expect(statut(ecran).text()).toBe('Départ : votre position actuelle.')
+      ecran.unmount()
+    })
+
+    it('toucher la barre affiche mes trajets récents dessous ; en choisir un le reprend', async () => {
+      simulerLocalStorage({
+        'gladys:accord-historique': JSON.stringify('accepte'),
+        'gladys:trajets-recents': JSON.stringify([
+          {
+            depart: { libelle: 'Lyon', latitude: 45.75, longitude: 4.85 },
+            arrivee: { libelle: 'Vienne', latitude: 45.52, longitude: 4.87 },
+            valideLe: '2026-11-16T10:00:00Z',
+          },
+        ]),
+      })
+      const ecran = monter()
+      expect(ecran.find('#trajets-sous-la-barre').exists()).toBe(false)
+      await ecran.find('#arrivee').trigger('focusin')
+      const sousLaBarre = ecran.find('#trajets-sous-la-barre')
+      expect(sousLaBarre.text()).toContain('Mes trajets récents')
+      await sousLaBarre.find('button').trigger('click')
+      expect((ecran.find('#arrivee').element as HTMLInputElement).value).toBe('Vienne')
+      expect((ecran.find('#depart').element as HTMLInputElement).value).toBe('Lyon')
+      expect(ecran.find('#trajets-sous-la-barre').exists()).toBe(false)
+      ecran.unmount()
+    })
+
+    it('Échap referme les trajets récents sous la barre', async () => {
+      simulerLocalStorage({
+        'gladys:accord-historique': JSON.stringify('accepte'),
+        'gladys:trajets-recents': JSON.stringify([
+          {
+            depart: { libelle: 'Lyon', latitude: 45.75, longitude: 4.85 },
+            arrivee: { libelle: 'Vienne', latitude: 45.52, longitude: 4.87 },
+            valideLe: '2026-11-16T10:00:00Z',
+          },
+        ]),
+      })
+      const ecran = monter()
+      await ecran.find('#arrivee').trigger('focusin')
+      vi.useRealTimers()
+      expect(await violationsAccessibilite(document.body)).toEqual([])
+      await ecran.find('#arrivee').trigger('keydown', { key: 'Escape' })
+      expect(ecran.find('#trajets-sous-la-barre').exists()).toBe(false)
+      ecran.unmount()
+    })
   })
 
   describe('Critère 1 : saisir une adresse ou une commune pour le départ et l’arrivée', () => {
     it('propose des communes et des adresses pendant la saisie et retient le choix', async () => {
       const ecran = monter()
+      await ouvrirLeDepart(ecran)
       fetchSimule.mockResolvedValueOnce(reponseBaseAdresse(['Vienne', 'Vienne-en-Arthies']))
       await taper(ecran, 'depart', 'Vienne')
       expect(fetchSimule.mock.calls[0]![0]).toContain('q=Vienne')
@@ -96,33 +180,43 @@ describe('Écran « Préparer mon trajet »', () => {
     it('demande de choisir un lieu dans la liste avant de valider', async () => {
       const ecran = monter()
       await ecran.find('form').trigger('submit')
-      expect(ecran.text()).toContain('Choisissez votre départ dans la liste des propositions.')
       expect(ecran.text()).toContain('Choisissez votre arrivée dans la liste des propositions.')
+      expect(ecran.find('#arrivee').attributes('aria-describedby')).toBeTruthy()
+      expect(document.activeElement?.id).toBe('arrivee')
+      await ouvrirLeDepart(ecran)
+      await choisirLieu(ecran, 'arrivee', 'Vienne', 'Vienne')
+      await ecran.find('form').trigger('submit')
+      await flushPromises()
+      expect(ecran.text()).toContain('Choisissez votre départ dans la liste des propositions.')
       expect(ecran.find('#depart').attributes('aria-describedby')).toBeTruthy()
       ecran.unmount()
     })
   })
 
   describe('Critère 2 : utiliser ma position actuelle comme départ', () => {
-    it('remplit le départ avec l’adresse la plus proche quand la position est accordée', async () => {
+    it('par défaut, le départ est l’adresse la plus proche de ma position, trouvée en validant', async () => {
       simulerPosition(true)
-      fetchSimule.mockResolvedValueOnce(reponseBaseAdresse(['12 Rue de la République 69001 Lyon']))
       const ecran = monter()
-      await boutonNomme(ecran, 'Utiliser ma position actuelle').trigger('click')
+      await choisirLieu(ecran, 'arrivee', 'Vienne', 'Vienne')
+      fetchSimule.mockResolvedValueOnce(reponseBaseAdresse(['12 Rue de la République 69001 Lyon']))
+      await ecran.find('form').trigger('submit')
       await flushPromises()
-      expect(fetchSimule.mock.calls[0]![0]).toContain('/reverse?lat=45.75&lon=4.85')
-      expect((ecran.find('#depart').element as HTMLInputElement).value).toBe('12 Rue de la République 69001 Lyon')
-      expect(ecran.text()).toContain('Départ rempli avec votre position actuelle')
+      expect(fetchSimule.mock.calls[1]![0]).toContain('/reverse?lat=45.75&lon=4.85')
+      expect(statut(ecran).text()).toBe('Trajet prêt : de 12 Rue de la République 69001 Lyon à Vienne.')
+      expect(ecran.find('#titre-itineraire').exists()).toBe(true)
       ecran.unmount()
     })
 
-    it('affiche un message clair quand la position est refusée', async () => {
+    it('affiche un message clair, relié au champ « Départ », quand la position est refusée', async () => {
       simulerPosition(false)
       const ecran = monter()
-      await boutonNomme(ecran, 'Utiliser ma position actuelle').trigger('click')
+      await choisirLieu(ecran, 'arrivee', 'Vienne', 'Vienne')
+      await ecran.find('form').trigger('submit')
       await flushPromises()
       expect(ecran.text()).toContain('Position refusée : autorisez la localisation pour GLADYS')
-      expect(fetchSimule).not.toHaveBeenCalled()
+      expect(ecran.find('#depart').attributes('aria-describedby')).toBeTruthy()
+      expect(document.activeElement?.id).toBe('depart')
+      expect(fetchSimule).toHaveBeenCalledTimes(1)
       ecran.unmount()
     })
   })
@@ -139,17 +233,18 @@ describe('Écran « Préparer mon trajet »', () => {
     it('dit que la recherche a besoin du réseau quand le service ne répond pas', async () => {
       fetchSimule.mockRejectedValueOnce(new TypeError('Failed to fetch'))
       const ecran = monter()
-      await taper(ecran, 'depart', 'Lyon')
+      await taper(ecran, 'arrivee', 'Lyon')
       expect(ecran.text()).toContain('La recherche d’adresse a besoin du réseau')
       ecran.unmount()
     })
 
-    it('hors connexion, désactive la recherche et la position et l’explique', async () => {
+    it('hors connexion, désactive la recherche et l’explique', async () => {
       definirEnLigne(false)
       const ecran = monter()
       expect(ecran.text()).toContain('Sans réseau, la recherche d’adresse et la position actuelle sont indisponibles')
+      expect(ecran.find('#arrivee').attributes('disabled')).toBeDefined()
+      await ouvrirLeDepart(ecran)
       expect(ecran.find('#depart').attributes('disabled')).toBeDefined()
-      expect(boutonNomme(ecran, 'Utiliser ma position actuelle').attributes('disabled')).toBeDefined()
       ecran.unmount()
     })
   })

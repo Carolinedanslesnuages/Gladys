@@ -12,10 +12,13 @@ const props = defineProps<{
   enLigne: boolean
   /** Message d'erreur venu de l'écran (ex. : position refusée), affiché sous le champ. */
   erreurExterne?: string
+  /** Aide affichée sous l'étiquette. */
+  indication?: string
 }>()
 const lieuChoisi = defineModel<Lieu | null>({ required: true })
 
-const MESSAGE_SANS_RESEAU = 'La recherche d’adresse a besoin du réseau. Vous pouvez reprendre un de vos trajets récents.'
+const MESSAGE_SANS_RESEAU =
+  'La recherche d’adresse a besoin du réseau. Vous pouvez reprendre un de vos trajets récents.'
 const NOMBRE_MINIMAL_DE_CARACTERES = 3
 const DELAI_AVANT_RECHERCHE_EN_MS = 400
 
@@ -94,7 +97,7 @@ onUnmounted(() => clearTimeout(minuteurRecherche))
       :model-value="texteTape"
       :label="label"
       label-visible
-      hint="Une adresse ou le nom d’une commune, puis choisissez dans la liste"
+      :hint="indication ?? 'Une adresse ou le nom d’une commune, puis choisissez dans la liste'"
       :error-message="messageErreur"
       :valid-message="messageValide"
       :disabled="!enLigne"
@@ -109,6 +112,8 @@ onUnmounted(() => clearTimeout(minuteurRecherche))
         <DsfrButton type="button" tertiary size="lg" :label="lieu.libelle" class="proposition" @click="choisir(lieu)" />
       </li>
     </ul>
+    <!-- Proposé tant que rien n'est tapé (ex. : les trajets récents sous la barre « Où allez-vous ? »). -->
+    <slot v-else-if="texteTape.trim() === ''" name="sans-saisie" />
   </div>
 </template>
 

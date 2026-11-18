@@ -29,37 +29,45 @@ const dateLisible = (iso: string) => new Date(iso).toLocaleString('fr-FR', { dat
 </script>
 
 <template>
-  <h1>GLADYS</h1>
-  <p>Exemple : des relevés saisis sur le terrain, même sans réseau. Ils restent sur cet appareil.</p>
+  <div class="fr-container fr-my-6w">
+    <h1>GLADYS</h1>
+    <p>Exemple : des relevés saisis sur le terrain, même sans réseau. Ils restent sur cet appareil.</p>
 
-  <form novalidate class="fr-mb-4w" @submit.prevent="ajouter">
-    <DsfrInputGroup v-model="texte" label="Nouveau relevé" label-visible :error-message="erreurSaisie" />
-    <DsfrButton type="submit" label="Ajouter" icon="fr-icon-add-line" />
-  </form>
+    <form novalidate class="fr-mb-4w" @submit.prevent="ajouter">
+      <DsfrInputGroup v-model="texte" label="Nouveau relevé" label-visible :error-message="erreurSaisie" />
+      <DsfrButton type="submit" label="Ajouter" icon="fr-icon-add-line" />
+    </form>
 
-  <p role="status" class="fr-sr-only">{{ annonce }}</p>
-  <DsfrAlert v-if="erreur" type="error" small :description="erreur" class="fr-mb-2w" />
+    <p role="status" class="fr-sr-only">{{ annonce }}</p>
+    <DsfrAlert v-if="erreur" type="error" small :description="erreur" class="fr-mb-2w" />
 
-  <h2 class="fr-h5">Relevés ({{ releves.length }})</h2>
-  <p v-if="releves.length === 0">Aucun relevé pour l’instant.</p>
-  <ul v-else class="fr-p-0 releves">
-    <li v-for="releve in releves" :key="releve.id" class="fr-mb-2w">
-      <p class="fr-mb-1v">{{ releve.texte }}</p>
-      <p class="fr-text--xs fr-mb-1v">Saisi le {{ dateLisible(releve.saisiLe) }}</p>
-      <DsfrButton size="sm" tertiary label="Supprimer" :aria-label="`Supprimer le relevé « ${releve.texte} »`" @click="supprimer(releve.id)" />
-    </li>
-  </ul>
+    <h2 class="fr-h5">Relevés ({{ releves.length }})</h2>
+    <p v-if="releves.length === 0">Aucun relevé pour l’instant.</p>
+    <ul v-else class="fr-p-0 releves">
+      <li v-for="releve in releves" :key="releve.id" class="fr-mb-2w">
+        <p class="fr-mb-1v">{{ releve.texte }}</p>
+        <p class="fr-text--xs fr-mb-1v">Saisi le {{ dateLisible(releve.saisiLe) }}</p>
+        <DsfrButton
+          size="sm"
+          tertiary
+          label="Supprimer"
+          :aria-label="`Supprimer le relevé « ${releve.texte} »`"
+          @click="supprimer(releve.id)"
+        />
+      </li>
+    </ul>
 
-  <DsfrAccordionsGroup class="fr-mt-4w">
-    <DsfrAccordion id="installer" title="Installer l’application sur mon téléphone">
-      <ul>
-        <li><strong>Android (Chrome, Edge)</strong> : menu ⋮, puis « Installer l’application ».</li>
-        <li><strong>iPhone (Safari)</strong> : bouton Partager, puis « Sur l’écran d’accueil ».</li>
-        <li><strong>Ordinateur (Chrome, Edge)</strong> : icône d’installation dans la barre d’adresse.</li>
-      </ul>
-      <p class="fr-mb-0">Une fois installée, elle s’ouvre comme une application et fonctionne sans réseau.</p>
-    </DsfrAccordion>
-  </DsfrAccordionsGroup>
+    <DsfrAccordionsGroup class="fr-mt-4w">
+      <DsfrAccordion id="installer" title="Installer l’application sur mon téléphone">
+        <ul>
+          <li><strong>Android (Chrome, Edge)</strong> : menu ⋮, puis « Installer l’application ».</li>
+          <li><strong>iPhone (Safari)</strong> : bouton Partager, puis « Sur l’écran d’accueil ».</li>
+          <li><strong>Ordinateur (Chrome, Edge)</strong> : icône d’installation dans la barre d’adresse.</li>
+        </ul>
+        <p class="fr-mb-0">Une fois installée, elle s’ouvre comme une application et fonctionne sans réseau.</p>
+      </DsfrAccordion>
+    </DsfrAccordionsGroup>
+  </div>
 </template>
 
 <style scoped>

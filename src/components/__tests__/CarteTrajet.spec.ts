@@ -22,8 +22,9 @@ const monter = (enLigne = true) =>
     attachTo: document.body,
   })
 
+/** Les boutons posés sur la carte n'ont qu'une icône : leur nom est dans `aria-label`. */
 const boutonNomme = (ecran: ReturnType<typeof monter>, intitule: string) =>
-  ecran.findAll('button').find((bouton) => bouton.text() === intitule)!
+  ecran.findAll('button').find((bouton) => bouton.text() === intitule || bouton.attributes('aria-label') === intitule)!
 
 describe('Carte du trajet', () => {
   let cadrages: Leaflet.LatLngBounds[]
@@ -320,7 +321,7 @@ describe('Carte du trajet', () => {
         expect(zone.attributes('aria-label')).toBe('Carte en plein écran')
         expect(ecran.find('#annonce-suivi').text()).toBe('Recherche de votre position…')
         expect(document.getElementById('reste-de-la-page')!.hasAttribute('inert')).toBe(true)
-        expect(document.activeElement?.textContent?.trim()).toBe('Quitter le plein écran')
+        expect(document.activeElement?.getAttribute('aria-label')).toBe('Quitter le plein écran')
         expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeTruthy()
         await recevoirPosition(ecran, 45.6, 4.95)
         expect(ecran.find('#avancement-trajet').text()).toContain('Il vous reste 10,9 km')
@@ -366,7 +367,7 @@ describe('Carte du trajet', () => {
         await ecran.vm.$nextTick()
         expect(ecran.find('#zone-carte').classes()).not.toContain('zone-carte--plein-ecran')
         expect(document.getElementById('reste-de-la-page')!.hasAttribute('inert')).toBe(false)
-        expect(document.activeElement?.textContent?.trim()).toBe('Afficher la carte en plein écran')
+        expect(document.activeElement?.getAttribute('aria-label')).toBe('Afficher la carte en plein écran')
         expect(boutonNomme(ecran, 'Arrêter de suivre ma position')).toBeTruthy()
         await boutonNomme(ecran, 'Afficher la carte en plein écran').trigger('click')
         await ecran.vm.$nextTick()
@@ -381,6 +382,55 @@ describe('Carte du trajet', () => {
         await boutonNomme(ecran, 'Afficher la carte en plein écran').trigger('click')
         await ecran.vm.$nextTick()
         await recevoirPosition(ecran, 45.6, 5.0)
+        expect(await violationsAccessibilite(document.body)).toEqual([])
+        ecran.unmount()
+      })
+    })
+
+    describe('Demande #26 : carte d’accueil, comme une application de navigation', () => {
+      const monterAlAccueil = () =>
+        mount(CarteTrajet, {
+          props: { trace: [], depart: null, arrivee: null, enLigne: true, suivreDesLOuverture: true },
+          global: { plugins: [VueDsfr] },
+          attachTo: document.body,
+        })
+
+      it('sans trajet, s’ouvre sur la France, cherche la personne et se centre sur elle', async () => {
+        const ecran = monterAlAccueil()
+        await ecran.vm.$nextTick()
+        expect(lignesTracees).toHaveLength(0)
+        expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe('Carte autour de ma position')
+        expect(ecran.find('#annonce-suivi').text()).toBe('Recherche de votre position…')
+        await recevoirPosition(ecran, 45.75, 4.85)
+        expect(reperesPlaces.map((repere) => repere.libelle)).toEqual(['Vous'])
+        expect(ecran.find('#avancement-trajet').exists()).toBe(false)
+        ecran.unmount()
+      })
+
+      it('position refusée à l’ouverture : la France reste affichée, sans alerte', async () => {
+        const ecran = monterAlAccueil()
+        surEchec!({ code: 1 })
+        await ecran.vm.$nextTick()
+        expect(ecran.find('.fr-alert--error').exists()).toBe(false)
+        expect(ecran.find('#annonce-suivi').text()).toContain('la carte montre la France')
+        expect(boutonNomme(ecran, 'Suivre ma position sur la carte')).toBeTruthy()
+        ecran.unmount()
+      })
+
+      it('un trajet calculé ensuite est tracé et montré en entier', async () => {
+        const ecran = monterAlAccueil()
+        await recevoirPosition(ecran, 45.75, 4.85)
+        await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
+        expect(lignesTracees).toHaveLength(1)
+        expect(cadrages).toHaveLength(1)
+        expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe('Carte du trajet de Lyon à Vienne')
+        expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeTruthy()
+        ecran.unmount()
+      })
+
+      it('aucune violation d’accessibilité automatique sur la carte d’accueil', async () => {
+        const ecran = monterAlAccueil()
+        await recevoirPosition(ecran, 45.75, 4.85)
         expect(await violationsAccessibilite(document.body)).toEqual([])
         ecran.unmount()
       })

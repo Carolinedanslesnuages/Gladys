@@ -22,8 +22,19 @@ const liensRapides = [
   />
   <EtatConnexion />
   <MiseAJour />
-  <main id="contenu" class="fr-container fr-my-6w">
+  <!-- Chaque écran pose sa marge : l'accueil met la carte bord à bord. -->
+  <main id="contenu">
     <RouterView />
   </main>
   <DsfrFooter :logo-text="logoText" />
 </template>
+
+<style>
+/* Sur téléphone, l'en-tête reste compact pour laisser la place à la carte : l'accroche se masque
+   (le logo GLADYS reste), les liens passent dans le menu. */
+@media (max-width: 61.98em) {
+  .fr-header .fr-header__service {
+    display: none;
+  }
+}
+</style>
