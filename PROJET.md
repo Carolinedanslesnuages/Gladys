@@ -14,3 +14,4 @@
 - #2 Saisir mon départ et mon arrivée — [fiche](revues/story-2-saisir-mon-depart-et-mon-arrivee.md)
 - #3 Calculer un itinéraire adapté à ma VSP — [fiche](revues/story-3-calculer-un-itineraire-adapte-a-ma-vsp.md)
 - #4 Connaître mon vrai temps de trajet — [fiche](revues/story-4-connaitre-mon-vrai-temps-de-trajet.md)
+- #5 Voir et comparer le trajet avant de partir — [fiche](revues/story-5-voir-et-comparer-le-trajet-avant-de-part.md)

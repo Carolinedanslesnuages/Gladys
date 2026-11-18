@@ -55,6 +55,20 @@ describe('Itinéraire et détour accepté', () => {
     await magasin.calculer(lieu('Lyon'), lieu('Vienne'))
     expect(magasin.resultat?.itineraire.distanceMetres).toBe(10000)
     expect(magasin.resultat?.detourTropLong).toBe(true)
+    expect(magasin.resultat?.retenuEstLePlusCourt).toBe(true)
+    expect(magasin.resultat?.plusCourt.distanceMetres).toBe(10000)
+  })
+
+  it('Story #5 : garde aussi le trajet le plus court, pour comparer', async () => {
+    simulerLocalStorage()
+    const fetchSimule = vi.fn<(adresse: string) => Promise<Response>>()
+    fetchSimule.mockResolvedValueOnce(reponseIgn(10000, 4000)).mockResolvedValueOnce(reponseIgn(12500, 0))
+    vi.stubGlobal('fetch', fetchSimule)
+    const magasin = useItineraireStore()
+    await magasin.calculer(lieu('Lyon'), lieu('Vienne'))
+    expect(magasin.resultat?.itineraire.distanceMetres).toBe(12500)
+    expect(magasin.resultat?.plusCourt.distanceMetres).toBe(10000)
+    expect(magasin.resultat?.retenuEstLePlusCourt).toBe(false)
     expect(magasin.calculEnCours).toBe(false)
   })
 

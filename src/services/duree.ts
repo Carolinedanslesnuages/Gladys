@@ -31,6 +31,13 @@ export function formaterDuree(minutes: number): string {
   return minutesRestantes === 0 ? `${heures} h` : `${heures} h ${minutesRestantes} min`
 }
 
+/** « 12 min de plus », « 1 h 5 min de moins », ou « même durée » : écart arrondi à la minute. */
+export function formaterEcartDeDuree(minutesRetenu: number, minutesPlusCourt: number): string {
+  const ecartMinutes = Math.round(minutesRetenu) - Math.round(minutesPlusCourt)
+  if (ecartMinutes === 0) return 'même durée'
+  return `${formaterDuree(Math.abs(ecartMinutes))} de ${ecartMinutes > 0 ? 'plus' : 'moins'}`
+}
+
 /** Heure de départ du jour, à partir d'un « HH:MM » saisi ; vide : maintenant. */
 export function dateDeDepart(heureSaisie: string, maintenant: Date): Date {
   const correspondance = /^(\d{1,2}):(\d{2})$/.exec(heureSaisie)

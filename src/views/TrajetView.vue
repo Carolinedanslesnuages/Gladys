@@ -7,7 +7,14 @@ import { PositionRefusee, positionActuelle } from '@/services/position'
 import { NOMBRE_DE_TRAJETS_GARDES, useTrajetsStore, type Trajet } from '@/stores/trajets'
 import { SEUILS_DE_DETOUR, useItineraireStore } from '@/stores/itineraire'
 import { useDureeStore } from '@/stores/duree'
-import { VITESSE_MAXIMALE_KMH, VITESSE_MINIMALE_KMH, formaterDuree, formaterHeure, vitesseValide } from '@/services/duree'
+import {
+  VITESSE_MAXIMALE_KMH,
+  VITESSE_MINIMALE_KMH,
+  formaterDuree,
+  formaterEcartDeDuree,
+  formaterHeure,
+  vitesseValide,
+} from '@/services/duree'
 
 const magasinTrajets = useTrajetsStore()
 const { accord, trajetsRecents, erreur: erreurEnregistrement } = storeToRefs(magasinTrajets)
@@ -61,7 +68,7 @@ const annonceItineraire = computed(() => {
 
 // Durée et heure d'arrivée : recalculées sur l'appareil, même sans réseau.
 const magasinDuree = useDureeStore()
-const { vitesseHabituelle, heureDepart, dureeMinutes, erreur: erreurDuree } = storeToRefs(magasinDuree)
+const { vitesseHabituelle, heureDepart, dureeMinutes, dureePlusCourtMinutes, erreur: erreurDuree } = storeToRefs(magasinDuree)
 const vitesseSaisie = ref(String(vitesseHabituelle.value))
 const erreurVitesse = ref('')
 const heureMaintenant = () => {
@@ -99,6 +106,34 @@ const annonceDuree = computed(() =>
     ? `Durée estimée : ${horairesEstimes.value.duree}, arrivée vers ${horairesEstimes.value.arrivee}.`
     : '',
 )
+
+// Comparaison avec le trajet le plus court, à la même vitesse de VSP.
+const ecartDeDistance = (metresRetenu: number, metresPlusCourt: number) => {
+  const ecartMetres = metresRetenu - metresPlusCourt
+  if (Math.abs(ecartMetres) < 50) return 'même distance'
+  return `${enKilometres(Math.abs(ecartMetres))} de ${ecartMetres > 0 ? 'plus' : 'moins'}`
+}
+
+const comparaison = computed(() => {
+  if (!resultat.value || dureeMinutes.value === null || dureePlusCourtMinutes.value === null) return null
+  if (resultat.value.retenuEstLePlusCourt) {
+    return { dejaLePlusCourt: true, annonce: 'Votre trajet est déjà le trajet le plus court sans autoroute.' }
+  }
+  const plusCourt = {
+    distance: enKilometres(resultat.value.plusCourt.distanceMetres),
+    duree: formaterDuree(dureePlusCourtMinutes.value),
+  }
+  const ecart = `${formaterEcartDeDuree(dureeMinutes.value, dureePlusCourtMinutes.value)}, ${ecartDeDistance(
+    resultat.value.itineraire.distanceMetres,
+    resultat.value.plusCourt.distanceMetres,
+  )}`
+  return {
+    dejaLePlusCourt: false,
+    plusCourt,
+    ecart,
+    annonce: `Trajet le plus court : ${plusCourt.distance}, ${plusCourt.duree}. Votre trajet : ${ecart}.`,
+  }
+})
 
 async function calculerMonItineraire(): Promise<void> {
   if (!depart.value || !arrivee.value || !enLigne.value) return
@@ -311,6 +346,31 @@ async function effacer(confirme: boolean): Promise<void> {
         @update:model-value="(heureSaisie: string | number | undefined) => magasinDuree.choisirHeureDepart(String(heureSaisie ?? ''))"
       />
     </template>
+
+    <template v-if="comparaison">
+      <h3 class="fr-h6 fr-mt-3w">Comparer avec le trajet le plus court</h3>
+      <div id="comparaison-trajet" class="fr-mb-2w">
+        <p v-if="comparaison.dejaLePlusCourt">{{ comparaison.annonce }}</p>
+        <dl v-else class="fr-mb-0">
+          <dt>Trajet le plus court sans autoroute</dt>
+          <dd>{{ comparaison.plusCourt?.distance }}, {{ comparaison.plusCourt?.duree }}</dd>
+          <dt>Votre trajet par rapport à lui</dt>
+          <dd>{{ comparaison.ecart }}</dd>
+        </dl>
+      </div>
+      <p id="annonce-comparaison" role="status" class="fr-sr-only">{{ comparaison.annonce }}</p>
+    </template>
+
+    <template v-if="resultat && resultat.itineraire.etapes.length > 0">
+      <h3 id="titre-etapes" class="fr-h6 fr-mt-3w">Les étapes de mon trajet</h3>
+      <ol id="etapes-trajet" class="etapes" aria-labelledby="titre-etapes">
+        <li v-for="(etape, rang) in resultat.itineraire.etapes" :key="rang" class="fr-mb-1w">
+          <strong>{{ etape.commune ?? 'Commune non précisée' }}</strong> — {{ etape.route }} —
+          {{ enKilometres(etape.distanceMetres) }}
+          <DsfrBadge v-if="etape.departementale" label="Départementale" type="warning" small class="fr-ml-1w" />
+        </li>
+      </ol>
+    </template>
   </section>
   <DsfrAlert v-if="erreurEnregistrement" type="error" small :description="erreurEnregistrement" class="fr-mb-2w" />
 
@@ -381,6 +441,9 @@ dd {
   display: flex;
   flex-wrap: wrap;
   gap: 0 2rem;
+}
+.etapes {
+  overflow-wrap: anywhere;
 }
 .question-accord {
   border: 1px solid var(--border-default-grey);

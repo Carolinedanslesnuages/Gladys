@@ -4,7 +4,10 @@ import { useDureeStore } from '../duree'
 import { useItineraireStore } from '../itineraire'
 import { simulerLocalStorage } from '@/__tests__/stockage-simule'
 
-/** Itinéraire de 15 km à 30 km/h puis 15 km à 80 km/h, posé directement dans le magasin. */
+/**
+ * Itinéraire de 15 km à 30 km/h puis 15 km à 80 km/h, posé directement dans le magasin ;
+ * le plus court fait 22,5 km sur une route à 80 km/h.
+ */
 function poserItineraire(): void {
   useItineraireStore().resultat = {
     itineraire: {
@@ -14,7 +17,15 @@ function poserItineraire(): void {
         { distanceMetres: 15000, vitesseRouteKmh: 30 },
         { distanceMetres: 15000, vitesseRouteKmh: 80 },
       ],
+      etapes: [],
     },
+    plusCourt: {
+      distanceMetres: 22500,
+      departementaleMetres: 22500,
+      troncons: [{ distanceMetres: 22500, vitesseRouteKmh: 80 }],
+      etapes: [],
+    },
+    retenuEstLePlusCourt: false,
     sansDepartementalePossible: true,
     detourTropLong: false,
   }
@@ -39,6 +50,16 @@ describe('Durée du trajet et heure d’arrivée', () => {
     expect(magasin.dureeMinutes).toBeCloseTo(50)
     magasin.choisirVitesse(40)
     expect(magasin.dureeMinutes).toBeCloseTo(52.5)
+  })
+
+  it('Story #5 : durée du trajet le plus court à la même vitesse (30 min à 45 km/h, 33 min 45 à 40 km/h)', () => {
+    simulerLocalStorage()
+    expect(useDureeStore().dureePlusCourtMinutes).toBeNull()
+    poserItineraire()
+    const magasin = useDureeStore()
+    expect(magasin.dureePlusCourtMinutes).toBeCloseTo(30)
+    magasin.choisirVitesse(40)
+    expect(magasin.dureePlusCourtMinutes).toBeCloseTo(33.75)
   })
 
   it('Critère 2 : l’arrivée suit l’heure de départ choisie', () => {

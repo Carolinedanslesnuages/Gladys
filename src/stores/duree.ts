@@ -21,6 +21,13 @@ export const useDureeStore = defineStore('duree', () => {
       : null,
   )
 
+  /** Durée du trajet le plus court, à la même vitesse : pour comparer avant de partir. */
+  const dureePlusCourtMinutes = computed(() =>
+    magasinItineraire.resultat
+      ? dureeEnMinutes(magasinItineraire.resultat.plusCourt.troncons, vitesseHabituelle.value)
+      : null,
+  )
+
   function choisirVitesse(nouvelleVitesse: number): void {
     vitesseHabituelle.value = nouvelleVitesse
     erreur.value = ecrire('vitesse-habituelle', nouvelleVitesse)
@@ -39,7 +46,16 @@ export const useDureeStore = defineStore('duree', () => {
     return { depart, arrivee: heureDArrivee(depart, dureeMinutes.value) }
   }
 
-  return { vitesseHabituelle, heureDepart, erreur, dureeMinutes, choisirVitesse, choisirHeureDepart, horaires }
+  return {
+    vitesseHabituelle,
+    heureDepart,
+    erreur,
+    dureeMinutes,
+    dureePlusCourtMinutes,
+    choisirVitesse,
+    choisirHeureDepart,
+    horaires,
+  }
 })
 
 if (import.meta.hot) import.meta.hot.accept(acceptHMRUpdate(useDureeStore, import.meta.hot))
