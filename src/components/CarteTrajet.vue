@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * Carte du trajet retenu : fond OpenStreetMap (libre, sans compte), tracé, repères « Départ »
- * et « Arrivée ». Déplaçable et zoomable aux doigts, au clavier (flèches, + et −) et par deux
+ * Carte du trajet retenu : fond OpenStreetMap (libre, sans compte), tracé, épingles « Départ »
+ * (un rond) et « Arrivée » (un drapeau). Déplaçable et zoomable aux doigts, au clavier (flèches, + et −) et par deux
  * boutons. Sans réseau, le fond de carte est indisponible : un message le dit. La liste des étapes,
  * affichée sous la carte, en reste l'alternative écrite. Décision : docs/adr/0006-carte-du-trajet.md.
- * Pendant le trajet, la carte peut suivre la position de la personne, comme un GPS : véhicule « Vous »
+ * Pendant le trajet, la carte peut suivre la position de la personne, comme un GPS : son véhicule
  * au centre, tourné dans le sens de la marche, plein écran, bouton pour se recentrer, distance restante,
  * alerte si elle quitte le trajet. Décision : docs/adr/0008-guidage-sur-la-carte.md.
  * Fond OpenStreetMap plutôt que Plan IGN : docs/adr/0009-fond-de-carte-openstreetmap.md.
@@ -22,7 +22,7 @@ import 'leaflet/dist/leaflet.css'
 import type { Lieu } from '@/services/adresses'
 import type { PointDuTrace } from '@/services/itineraire'
 import { PositionRefusee, suivrePosition, type Coordonnees } from '@/services/position'
-import { avancementSurLeTrace, capEntre, distanceEntre } from '@/services/guidage'
+import { avancementSurLeTrace, capDuTraceDevant, capEntre, distanceEntre } from '@/services/guidage'
 
 const props = defineProps<{
   /** Tracé du trajet retenu ; vide tant qu'aucun itinéraire n'est calculé. */
@@ -52,19 +52,34 @@ let coucheDuTrajet: Leaflet.LayerGroup | null = null
 let observateurDeTaille: ResizeObserver | null = null
 
 const animationsReduites = () =>
-  typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-/** Repère écrit (« Départ », « Arrivée ») : l'information ne passe pas par la couleur seule. */
-const repere = (libelle: string) =>
+/** Forme d'une épingle de carte (28 × 40 px), sa pointe posée sur le lieu. */
+const FORME_EPINGLE =
+  'M14 1C7 1 1.5 6.5 1.5 13.5 1.5 23 14 39 14 39S26.5 23 26.5 13.5C26.5 6.5 21 1 14 1Z'
+/** Dans l'épingle : un rond pour le départ, un drapeau pour l'arrivée (pas la couleur seule). */
+const DESSIN_DANS_L_EPINGLE = {
+  depart: '<circle class="dessin-epingle" cx="14" cy="13.5" r="5" />',
+  arrivee: '<path class="dessin-epingle" d="M10 7.5h9l-2 3.25 2 3.25h-7.5v6H10Z" />',
+} as const
+
+/** Épingle « Départ » ou « Arrivée », nommée pour les lecteurs d'écran. */
+const epingle = (genre: keyof typeof DESSIN_DANS_L_EPINGLE, libelle: string) =>
   Leaflet.divIcon({
     className: 'repere-carte',
-    html: `<span class="etiquette-repere">${libelle}</span>`,
-    iconSize: [0, 0],
+    iconSize: [28, 40],
+    iconAnchor: [14, 40],
+    html:
+      `<span class="epingle epingle--${genre}">` +
+      '<svg viewBox="0 0 28 40" width="28" height="40" aria-hidden="true" focusable="false">' +
+      `<path class="corps-epingle" d="${FORME_EPINGLE}" />${DESSIN_DANS_L_EPINGLE[genre]}</svg>` +
+      `<span class="fr-sr-only">${libelle}</span></span>`,
   })
 
 /**
  * Repère de la personne : son véhicule vu de dessus, centré sur sa position, tourné dans le sens de
- * la marche (vers le haut tant que la direction est inconnue), et « Vous » écrit dessous.
+ * la marche (vers le haut tant que la direction est inconnue), sans étiquette écrite.
  */
 const repereDeLaPersonneIcone = () =>
   Leaflet.divIcon({
@@ -77,7 +92,7 @@ const repereDeLaPersonneIcone = () =>
       '<rect class="carrosserie-vous" x="7" y="5" width="18" height="22" rx="7" />' +
       '<path class="vitre-vous" d="M10.5 12 Q16 8.5 21.5 12 L20.5 16 L11.5 16 Z" />' +
       '<path class="vitre-vous" d="M12 22 L20 22 L20.5 24 Q16 25.5 11.5 24 Z" /></svg>' +
-      '<span class="etiquette-repere">Vous</span></span>',
+      '<span class="fr-sr-only">Votre position</span></span>',
   })
 
 const TOUCHES_DE_DEPLACEMENT = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
@@ -124,7 +139,7 @@ function creerCarte(conteneur: HTMLElement): void {
   if (props.suivreDesLOuverture && !suiviActif.value) demarrerLeSuivi({ automatique: true })
 }
 
-/** Tracé et repères « Départ », « Arrivée » ; la carte se cadre sur tout le trajet. */
+/** Tracé et épingles « Départ », « Arrivée » ; la carte se cadre sur tout le trajet. */
 function dessinerLeTrajet(): void {
   if (!carte || !coucheDuTrajet) return
   coucheDuTrajet.clearLayers()
@@ -138,12 +153,12 @@ function dessinerLeTrajet(): void {
   const pointDeDepart = pointsDuTrace[0]!
   const pointDArrivee = pointsDuTrace[pointsDuTrace.length - 1]!
   Leaflet.marker(pointDeDepart, {
-    icon: repere('Départ'),
+    icon: epingle('depart', 'Départ'),
     interactive: false,
     keyboard: false,
   }).addTo(coucheDuTrajet)
   Leaflet.marker(pointDArrivee, {
-    icon: repere('Arrivée'),
+    icon: epingle('arrivee', 'Arrivée'),
     interactive: false,
     keyboard: false,
   }).addTo(coucheDuTrajet)
@@ -152,14 +167,18 @@ function dessinerLeTrajet(): void {
   carte.fitBounds(ligneDuTrajet.getBounds(), { padding: [24, 24], animate: false })
 }
 
-// Nouveau trajet calculé : on le montre en entier ; « Me recentrer » ramène sur la personne.
+// Nouveau trajet calculé : on le montre en entier, sauf si la carte suit la personne. Alors, comme
+// un GPS, la voiture est recentrée et la route est droit devant elle.
 watch(
   () => props.trace,
   () => {
     dessinerLeTrajet()
-    if (aUnTrajet.value && suiviActif.value && carteCentreeSurLaPersonne.value) {
-      carteCentreeSurLaPersonne.value = false
-      messageDuSuivi.value = 'Trajet affiché en entier. Utilisez « Me recentrer » pour revenir sur votre position.'
+    if (aUnTrajet.value && suiviActif.value && positionSuivie.value) {
+      directionDeLaPersonne =
+        positionSuivie.value.cap ?? capDuTraceDevant(positionSuivie.value, props.trace)
+      recentrerSurLaPersonne()
+      orienterLaFleche()
+      messageDuSuivi.value = 'Trajet calculé : la carte vous suit, la route droit devant vous.'
     }
   },
 )
@@ -202,7 +221,9 @@ let repereDeLaPersonne: Leaflet.Marker | null = null
 let directionDeLaPersonne: number | null = null
 
 const avancement = computed(() =>
-  positionSuivie.value && aUnTrajet.value ? avancementSurLeTrace(positionSuivie.value, props.trace) : null,
+  positionSuivie.value && aUnTrajet.value
+    ? avancementSurLeTrace(positionSuivie.value, props.trace)
+    : null,
 )
 
 const enDistanceLisible = (metres: number) =>
@@ -211,14 +232,19 @@ const enDistanceLisible = (metres: number) =>
     : `${(metres / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`
 
 /** Direction du GPS si le téléphone la donne, sinon celle du dernier déplacement. */
-function directionDeMarche(positionPrecedente: Coordonnees | null, nouvellePosition: Coordonnees): number | null {
+function directionDeMarche(
+  positionPrecedente: Coordonnees | null,
+  nouvellePosition: Coordonnees,
+): number | null {
   if (nouvellePosition.cap !== undefined) return nouvellePosition.cap
   if (
     positionPrecedente &&
-    distanceEntre(positionPrecedente, nouvellePosition) >= DEPLACEMENT_MINIMAL_POUR_LA_DIRECTION_METRES
+    distanceEntre(positionPrecedente, nouvellePosition) >=
+      DEPLACEMENT_MINIMAL_POUR_LA_DIRECTION_METRES
   )
     return capEntre(positionPrecedente, nouvellePosition)
-  return directionDeLaPersonne
+  // Direction encore inconnue (personne à l'arrêt) : celle de la route devant elle.
+  return directionDeLaPersonne ?? capDuTraceDevant(nouvellePosition, props.trace)
 }
 
 /** Le véhicule pointe dans le sens de la marche à l'écran : sa direction, plus la rotation de la carte. */
@@ -299,7 +325,8 @@ function placerLaPersonne(coordonnees: Coordonnees): void {
 
 /** Après un changement de taille de la carte, la personne suivie reste à sa place, sans animation. */
 function garderLaPersonneAuCentre(): void {
-  if (!carte || !suiviActif.value || !carteCentreeSurLaPersonne.value || !positionSuivie.value) return
+  if (!carte || !suiviActif.value || !carteCentreeSurLaPersonne.value || !positionSuivie.value)
+    return
   const point = Leaflet.latLng(positionSuivie.value.latitude, positionSuivie.value.longitude)
   carte.panTo(centreQuiMontreLaRouteDevant(point, carte.getZoom()), { animate: false })
 }
@@ -307,7 +334,8 @@ function garderLaPersonneAuCentre(): void {
 function detacherLaCarte(): void {
   if (!suiviActif.value || !carteCentreeSurLaPersonne.value) return
   carteCentreeSurLaPersonne.value = false
-  messageDuSuivi.value = 'La carte ne vous suit plus. Utilisez « Me recentrer » pour revenir sur votre position.'
+  messageDuSuivi.value =
+    'La carte ne vous suit plus. Utilisez « Me recentrer » pour revenir sur votre position.'
 }
 
 /** « Me recentrer » : revient sur la personne (ou commence à la suivre), comme le bouton flèche d'un GPS. */
@@ -331,7 +359,8 @@ function signalerErreurDuSuivi(erreur: Error, automatique: boolean): void {
   arreterLeSuivi()
   // À l'ouverture, sans position : la carte montre la France, sans alerte (la personne n'a rien demandé).
   if (automatique) {
-    messageDuSuivi.value = 'Position non disponible : la carte montre la France. « Me recentrer » la cherche à nouveau.'
+    messageDuSuivi.value =
+      'Position non disponible : la carte montre la France. « Me recentrer » la cherche à nouveau.'
     return
   }
   erreurDuSuivi.value =
@@ -345,7 +374,9 @@ function demarrerLeSuivi({ automatique = false } = {}): void {
   messageDuSuivi.value = 'Recherche de votre position…'
   suiviActif.value = true
   carteCentreeSurLaPersonne.value = true
-  arreterLaGeolocalisation = suivrePosition(placerLaPersonne, (erreur) => signalerErreurDuSuivi(erreur, automatique))
+  arreterLaGeolocalisation = suivrePosition(placerLaPersonne, (erreur) =>
+    signalerErreurDuSuivi(erreur, automatique),
+  )
 }
 
 function arreterLeSuivi(): void {
@@ -439,9 +470,10 @@ const nomDeLaCarte = () =>
       :aria-label="pleinEcran ? 'Carte en plein écran' : undefined"
     >
       <p id="aide-carte" class="fr-sr-only">
-        Déplacez la carte avec le doigt ou les flèches du clavier. Zoomez avec les boutons, ou les touches + et −. Votre
-        position reste sur ce téléphone. Quand elle vous suit, la carte tourne dans le sens de la marche, sauf si vous
-        gardez le nord en haut. Gardez les yeux sur la route : regardez la carte seulement à l’arrêt.
+        Déplacez la carte avec le doigt ou les flèches du clavier. Zoomez avec les boutons, ou les
+        touches + et −. Votre position reste sur ce téléphone. Quand elle vous suit, la carte tourne
+        dans le sens de la marche, sauf si vous gardez le nord en haut. Gardez les yeux sur la route
+        : regardez la carte seulement à l’arrêt.
         <template v-if="pleinEcran">Touche Échap pour quitter le plein écran.</template>
       </p>
       <div
@@ -460,7 +492,9 @@ const nomDeLaCarte = () =>
         <DsfrAlert v-if="erreurDuSuivi" type="error" small :description="erreurDuSuivi" />
         <div v-if="avancement" id="avancement-trajet" class="panneau-avancement">
           <p class="fr-text--lg fr-mb-0">
-            <strong>Il vous reste {{ enDistanceLisible(avancement.distanceRestanteMetres) }}</strong>
+            <strong
+              >Il vous reste {{ enDistanceLisible(avancement.distanceRestanteMetres) }}</strong
+            >
             jusqu’à l’arrivée.
           </p>
           <DsfrAlert
@@ -491,7 +525,9 @@ const nomDeLaCarte = () =>
           icon-only
           :icon="suiviActif ? 'fr-icon-close-circle-line' : 'fr-icon-map-pin-2-line'"
           :label="suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'"
-          :aria-label="suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'"
+          :aria-label="
+            suiviActif ? 'Arrêter de suivre ma position' : 'Suivre ma position sur la carte'
+          "
           @click="basculerLeSuivi"
         />
         <DsfrButton
@@ -501,9 +537,15 @@ const nomDeLaCarte = () =>
           size="lg"
           icon-only
           icon="fr-icon-compass-3-line"
-          :label="sensDeLaMarche ? 'Garder le nord en haut de la carte' : 'Tourner la carte dans le sens de la marche'"
+          :label="
+            sensDeLaMarche
+              ? 'Garder le nord en haut de la carte'
+              : 'Tourner la carte dans le sens de la marche'
+          "
           :aria-label="
-            sensDeLaMarche ? 'Garder le nord en haut de la carte' : 'Tourner la carte dans le sens de la marche'
+            sensDeLaMarche
+              ? 'Garder le nord en haut de la carte'
+              : 'Tourner la carte dans le sens de la marche'
           "
           @click="basculerLeSensDeLaCarte"
         />
@@ -614,29 +656,32 @@ const nomDeLaCarte = () =>
   background: var(--background-default-grey);
   box-shadow: 0 2px 6px rgb(0 0 18 / 16%);
 }
-.carte-trajet :deep(.etiquette-repere) {
-  display: inline-block;
-  width: max-content;
-  padding: 0.125rem 0.5rem;
-  border: 2px solid var(--border-action-high-blue-france);
-  background: var(--background-default-grey);
-  color: var(--text-action-high-blue-france);
-  font-weight: 700;
-  font-size: 0.875rem;
-  transform: translate(-50%, -50%);
+/* Épingles du départ et de l'arrivée : bordure blanche pour rester visibles sur toutes les rues. */
+.carte-trajet :deep(.epingle svg) {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgb(0 0 18 / 40%));
 }
-/* Repère de la personne : le véhicule (24 px) est centré sur sa position, « Vous » écrit dessous. */
+.carte-trajet :deep(.corps-epingle) {
+  stroke: var(--background-default-grey);
+  stroke-width: 1.5;
+}
+.carte-trajet :deep(.epingle--depart .corps-epingle) {
+  fill: var(--background-action-high-blue-france);
+}
+.carte-trajet :deep(.epingle--arrivee .corps-epingle) {
+  fill: var(--background-flat-red-marianne);
+}
+.carte-trajet :deep(.dessin-epingle) {
+  fill: var(--background-default-grey);
+}
+/* Repère de la personne : le véhicule (24 px) est centré sur sa position. */
 .carte-trajet :deep(.repere-vous) {
   position: absolute;
   left: 0;
   top: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transform: translate(-50%, -12px);
-}
-.carte-trajet :deep(.repere-vous .etiquette-repere) {
-  transform: none;
+  display: block;
+  line-height: 0;
+  transform: translate(-50%, -50%);
 }
 .carte-trajet :deep(.vehicule-vous) {
   transform: rotate(var(--direction-vous, 0deg));

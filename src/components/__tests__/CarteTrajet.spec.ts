@@ -6,6 +6,7 @@ import CarteTrajet from '../CarteTrajet.vue'
 import type { Lieu } from '@/services/adresses'
 import type { PointDuTrace } from '@/services/itineraire'
 import { violationsAccessibilite } from '@/__tests__/accessibilite'
+import { capEntre, distanceEntre } from '@/services/guidage'
 
 const lyon: Lieu = { libelle: 'Lyon', latitude: 45.75, longitude: 4.85 }
 const vienne: Lieu = { libelle: 'Vienne', latitude: 45.52, longitude: 4.87 }
@@ -24,7 +25,9 @@ const monter = (enLigne = true) =>
 
 /** Les boutons posés sur la carte n'ont qu'une icône : leur nom est dans `aria-label`. */
 const boutonNomme = (ecran: ReturnType<typeof monter>, intitule: string) =>
-  ecran.findAll('button').find((bouton) => bouton.text() === intitule || bouton.attributes('aria-label') === intitule)!
+  ecran
+    .findAll('button')
+    .find((bouton) => bouton.text() === intitule || bouton.attributes('aria-label') === intitule)!
 
 describe('Carte du trajet', () => {
   let cadrages: Leaflet.LatLngBounds[]
@@ -42,17 +45,25 @@ describe('Carte du trajet', () => {
     const cadrerOriginal = Leaflet.Map.prototype.fitBounds
     const espionCadrage = vi.spyOn(Leaflet.Map.prototype, 'fitBounds')
     espionCadrage.mockImplementation(function (this: Leaflet.Map, limites, options) {
-      carteAffichee = espionCadrage.mock.contexts[espionCadrage.mock.contexts.length - 1] as Leaflet.Map
+      carteAffichee = espionCadrage.mock.contexts[
+        espionCadrage.mock.contexts.length - 1
+      ] as Leaflet.Map
       cadrages.push(limites as Leaflet.LatLngBounds)
       return cadrerOriginal.call(this, limites, options)
     })
     const ajouterLigneOriginal = Leaflet.Polyline.prototype.onAdd
-    vi.spyOn(Leaflet.Polyline.prototype, 'onAdd').mockImplementation(function (this: Leaflet.Polyline, carte) {
+    vi.spyOn(Leaflet.Polyline.prototype, 'onAdd').mockImplementation(function (
+      this: Leaflet.Polyline,
+      carte,
+    ) {
       lignesTracees.push(this.getLatLngs() as Leaflet.LatLng[])
       return ajouterLigneOriginal.call(this, carte)
     })
     const ajouterRepereOriginal = Leaflet.Marker.prototype.onAdd
-    vi.spyOn(Leaflet.Marker.prototype, 'onAdd').mockImplementation(function (this: Leaflet.Marker, carte) {
+    vi.spyOn(Leaflet.Marker.prototype, 'onAdd').mockImplementation(function (
+      this: Leaflet.Marker,
+      carte,
+    ) {
       const resultat = ajouterRepereOriginal.call(this, carte)
       reperesPlaces.push({
         libelle: this.getElement()?.textContent ?? '',
@@ -78,12 +89,21 @@ describe('Carte du trajet', () => {
     ecran.unmount()
   })
 
-  it('place un repère écrit « Départ » au début du tracé et « Arrivée » à la fin', () => {
+  it('Demande #28 : place une épingle « Départ » au début du tracé et « Arrivée » à la fin', () => {
     const ecran = monter()
-    expect(reperesPlaces.map((repere) => [repere.libelle, repere.position.lat, repere.position.lng])).toEqual([
+    expect(
+      reperesPlaces.map((repere) => [repere.libelle, repere.position.lat, repere.position.lng]),
+    ).toEqual([
       ['Départ', 45.75, 4.85],
       ['Arrivée', 45.52, 4.87],
     ])
+    // Des épingles, plus des étiquettes écrites ; différentes par leur dessin, pas seulement leur couleur.
+    expect(document.querySelector('.etiquette-repere')).toBeNull()
+    expect(document.querySelector('.epingle--depart circle.dessin-epingle')).not.toBeNull()
+    expect(document.querySelector('.epingle--arrivee path.dessin-epingle')).not.toBeNull()
+    // Leur nom reste lu par les lecteurs d'écran.
+    expect(document.querySelector('.epingle--depart .fr-sr-only')!.textContent).toBe('Départ')
+    expect(document.querySelector('.epingle--arrivee .fr-sr-only')!.textContent).toBe('Arrivée')
     ecran.unmount()
   })
 
@@ -106,7 +126,8 @@ describe('Carte du trajet', () => {
     const ecran = monter()
     const tuiles = Array.from(document.querySelectorAll<HTMLImageElement>('img.leaflet-tile'))
     expect(tuiles.length).toBeGreaterThan(0)
-    for (const tuile of tuiles) expect(tuile.src).toMatch(/^https:\/\/tile\.openstreetmap\.org\/10\/\d+\/\d+\.png$/)
+    for (const tuile of tuiles)
+      expect(tuile.src).toMatch(/^https:\/\/tile\.openstreetmap\.org\/10\/\d+\/\d+\.png$/)
     const mention = ecran.find('.leaflet-control-attribution')
     expect(mention.text()).toContain('© les contributeurs d’OpenStreetMap')
     expect(mention.find('a').attributes('href')).toBe('https://www.openstreetmap.org/copyright')
@@ -188,22 +209,32 @@ describe('Carte du trajet', () => {
       vi.unstubAllGlobals()
     })
 
-    const recevoirPosition = async (ecran: ReturnType<typeof monter>, latitude: number, longitude: number) => {
+    const recevoirPosition = async (
+      ecran: ReturnType<typeof monter>,
+      latitude: number,
+      longitude: number,
+    ) => {
       surSucces!({ coords: { latitude, longitude } })
       await ecran.vm.$nextTick()
     }
 
-    it('place un repère « Vous », centre la carte sur la personne et dit la distance restante', async () => {
+    it('place le véhicule de la personne, centre la carte sur la personne et dit la distance restante', async () => {
       const ecran = monter()
       await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
       expect(ecran.find('#annonce-suivi').text()).toBe('Recherche de votre position…')
       await recevoirPosition(ecran, 45.6, 4.95)
-      expect(reperesPlaces.map((repere) => repere.libelle)).toEqual(['Départ', 'Arrivée', 'Vous'])
+      expect(reperesPlaces.map((repere) => repere.libelle)).toEqual([
+        'Départ',
+        'Arrivée',
+        'Votre position',
+      ])
       expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.6, 3)
       expect(carteAffichee!.getZoom()).toBe(16)
       expect(ecran.find('#annonce-suivi').text()).toBe('Position trouvée : la carte vous suit.')
       // Du point du milieu jusqu'à Vienne : environ 10,9 km.
-      expect(ecran.find('#avancement-trajet').text()).toContain('Il vous reste 10,9 km jusqu’à l’arrivée.')
+      expect(ecran.find('#avancement-trajet').text()).toContain(
+        'Il vous reste 10,9 km jusqu’à l’arrivée.',
+      )
       expect(ecran.find('#avancement-trajet').text()).not.toContain('du trajet prévu')
       ecran.unmount()
     })
@@ -216,7 +247,7 @@ describe('Carte du trajet', () => {
       await recevoirPosition(ecran, 45.6, 4.95)
       await recevoirPosition(ecran, 45.52, 4.87)
       expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.52, 3)
-      expect(reperesPlaces.filter((repere) => repere.libelle === 'Vous')).toHaveLength(1)
+      expect(reperesPlaces.filter((repere) => repere.libelle === 'Votre position')).toHaveLength(1)
       expect(ecran.find('#avancement-trajet').text()).toContain('Il vous reste 0 m')
       ecran.unmount()
     })
@@ -235,7 +266,7 @@ describe('Carte du trajet', () => {
       await recevoirPosition(ecran, 45.6, 4.95)
       await boutonNomme(ecran, 'Arrêter de suivre ma position').trigger('click')
       expect(arretsDuSuivi).toBe(1)
-      expect(ecran.find('#carte-trajet').text()).not.toContain('Vous')
+      expect(ecran.find('#carte-trajet').text()).not.toContain('Votre position')
       expect(ecran.find('#avancement-trajet').exists()).toBe(false)
       expect(ecran.find('#annonce-suivi').text()).toBe('La carte ne suit plus votre position.')
       ecran.unmount()
@@ -272,15 +303,22 @@ describe('Carte du trajet', () => {
     }
     const repereVous = () => document.querySelector<HTMLElement>('.repere-vous')!
 
-    it('« Vous » est un véhicule, même sans direction connue, puis tourné dans le sens de la marche', async () => {
+    it('Demande #28 : la personne est un véhicule sans étiquette « Vous », même sans direction connue, puis tourné dans le sens de la marche', async () => {
       const ecran = monter()
       await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
       await recevoirPosition(ecran, 45.6, 4.95)
       expect(repereVous().querySelector('svg.vehicule-vous')).not.toBeNull()
       // Une toute petite voiture : une voiture sans permis.
       expect(repereVous().querySelector('svg.vehicule-vous')!.getAttribute('width')).toBe('24')
-      expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(true)
-      expect(repereVous().textContent).toBe('Vous')
+      // À l'arrêt sur le trajet, sans direction du GPS : la voiture regarde la route devant elle.
+      expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(false)
+      const versLaSuiteDuTrajet = capEntre(trace[1]!, trace[2]!)
+      expect(repereVous().style.getPropertyValue('--direction-vous')).toBe(
+        `${versLaSuiteDuTrajet}deg`,
+      )
+      expect(repereVous().querySelector('.etiquette-repere')).toBeNull()
+      expect(repereVous().textContent).toBe('Votre position')
+      expect(repereVous().querySelector('.fr-sr-only')).not.toBeNull()
       // Sans direction donnée par le GPS : celle du déplacement (ici, plein sud).
       await recevoirPosition(ecran, 45.59, 4.95)
       expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(false)
@@ -336,7 +374,10 @@ describe('Carte du trajet', () => {
         // Une taille neuve à chaque appel : le module de rotation divise le point reçu.
         vi.spyOn(Leaflet.Map.prototype, 'getSize').mockImplementation(() => Leaflet.point(320, 288))
         const centrerOriginal = Leaflet.Map.prototype.setView
-        vi.spyOn(Leaflet.Map.prototype, 'setView').mockImplementation(function (this: Leaflet.Map, ...arguments_) {
+        vi.spyOn(Leaflet.Map.prototype, 'setView').mockImplementation(function (
+          this: Leaflet.Map,
+          ...arguments_
+        ) {
           return centrerOriginal.apply(this, arguments_)
         })
       })
@@ -344,7 +385,7 @@ describe('Carte du trajet', () => {
       it('place le véhicule au milieu en largeur, 20 % sous le centre : on voit la route devant', async () => {
         const ecran = monter()
         await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
-        await recevoirPosition(ecran, 45.6, 4.95)
+        await recevoirPositionEtCap(ecran, 45.6, 4.95, 0)
         // Carte de 288 px de haut, nord en haut : le centre est 57,6 px (20 %) au nord du véhicule.
         expect(duVehiculeAuCentre().x).toBeCloseTo(0, 1)
         expect(duVehiculeAuCentre().y).toBeCloseTo(-57.6, 1)
@@ -376,7 +417,51 @@ describe('Carte du trajet', () => {
         expect(carteAffichee!.getBearing()).toBe(0)
         await boutonNomme(ecran, 'Tourner la carte dans le sens de la marche').trigger('click')
         expect(carteAffichee!.getBearing()).toBeCloseTo(180, 5)
-        expect(ecran.find('#annonce-suivi').text()).toBe('La carte tourne dans le sens de la marche.')
+        expect(ecran.find('#annonce-suivi').text()).toBe(
+          'La carte tourne dans le sens de la marche.',
+        )
+        ecran.unmount()
+      })
+
+      it('Demande #28 : à l’arrêt sur le trajet, sans direction du GPS, la route est droit devant', async () => {
+        const ecran = monter()
+        await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
+        await recevoirPosition(ecran, 45.6, 4.95)
+        const versLaSuiteDuTrajet = capEntre(trace[1]!, trace[2]!)
+        expect(carteAffichee!.getBearing()).toBeCloseTo(360 - versLaSuiteDuTrajet, 5)
+        ecran.unmount()
+      })
+
+      it('Demande #28 : trajet calculé depuis ma position, la voiture est recentrée, la route droit devant', async () => {
+        const ecran = mount(CarteTrajet, {
+          props: {
+            trace: [],
+            depart: null,
+            arrivee: null,
+            enLigne: true,
+            suivreDesLOuverture: true,
+          },
+          global: { plugins: [VueDsfr] },
+          attachTo: document.body,
+        })
+        await recevoirPosition(ecran, 45.75, 4.85)
+        await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
+        const [centreDemande, zoom] = vi.mocked(Leaflet.Map.prototype.setView).mock.lastCall!
+        // Au zoom du suivi, centré un peu devant la voiture (à moins de 200 m) : pas le trajet entier.
+        expect(zoom).toBe(16)
+        const centre = Leaflet.latLng(centreDemande)
+        expect(
+          distanceEntre(
+            { latitude: centre.lat, longitude: centre.lng },
+            { latitude: 45.75, longitude: 4.85 },
+          ),
+        ).toBeLessThan(200)
+        expect(carteAffichee!.getBearing()).toBeCloseTo(360 - capEntre(trace[0]!, trace[1]!), 5)
+        expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(false)
+        expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeUndefined()
+        expect(ecran.find('#annonce-suivi').text()).toBe(
+          'Trajet calculé : la carte vous suit, la route droit devant vous.',
+        )
         ecran.unmount()
       })
 
@@ -441,7 +526,9 @@ describe('Carte du trajet', () => {
         await recevoirPosition(ecran, 45.6, 4.95)
         // La distance restante s'affiche au-dessus : la carte perd de la hauteur.
         // (une taille neuve à chaque appel : Leaflet modifie parfois le point reçu)
-        vi.spyOn(Leaflet.Map.prototype, 'getSize').mockImplementation(() => Leaflet.point(1280, 520))
+        vi.spyOn(Leaflet.Map.prototype, 'getSize').mockImplementation(() =>
+          Leaflet.point(1280, 520),
+        )
         surChangementDeTaille!()
         // Au milieu en largeur, et 20 % de la hauteur sous le centre : 260 + 104 px.
         const placeDeLaPersonne = carteAffichee!.latLngToContainerPoint(Leaflet.latLng(45.6, 4.95))
@@ -458,7 +545,9 @@ describe('Carte du trajet', () => {
         await ecran.vm.$nextTick()
         expect(ecran.find('#zone-carte').classes()).not.toContain('zone-carte--plein-ecran')
         expect(document.getElementById('reste-de-la-page')!.hasAttribute('inert')).toBe(false)
-        expect(document.activeElement?.getAttribute('aria-label')).toBe('Afficher la carte en plein écran')
+        expect(document.activeElement?.getAttribute('aria-label')).toBe(
+          'Afficher la carte en plein écran',
+        )
         expect(boutonNomme(ecran, 'Arrêter de suivre ma position')).toBeTruthy()
         await boutonNomme(ecran, 'Afficher la carte en plein écran').trigger('click')
         await ecran.vm.$nextTick()
@@ -496,10 +585,16 @@ describe('Carte du trajet', () => {
         const ecran = monterAlAccueil()
         await ecran.vm.$nextTick()
         expect(lignesTracees).toHaveLength(0)
-        expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe('Carte autour de ma position')
+        expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe(
+          'Carte autour de ma position',
+        )
         expect(ecran.find('#annonce-suivi').text()).toBe('Recherche de votre position…')
         await recevoirPosition(ecran, 45.75, 4.85)
-        expect(reperesPlaces.map((repere) => repere.libelle)).toEqual(['Vous'])
+        expect(reperesPlaces.map((repere) => repere.libelle)).toEqual(['Votre position'])
+        // Sans trajet ni direction du GPS : la voiture n'a pas encore de direction.
+        expect(
+          document.querySelector('.repere-vous')!.classList.contains('repere-vous--sans-direction'),
+        ).toBe(true)
         expect(ecran.find('#avancement-trajet').exists()).toBe(false)
         ecran.unmount()
       })
@@ -514,14 +609,27 @@ describe('Carte du trajet', () => {
         ecran.unmount()
       })
 
-      it('un trajet calculé ensuite est tracé et montré en entier', async () => {
+      it('Demande #28 : un trajet calculé ensuite est tracé, la carte reste sur la personne', async () => {
         const ecran = monterAlAccueil()
         await recevoirPosition(ecran, 45.75, 4.85)
         await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
         expect(lignesTracees).toHaveLength(1)
+        expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe(
+          'Carte du trajet de Lyon à Vienne',
+        )
+        expect(carteAffichee!.getZoom()).toBe(16)
+        expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeUndefined()
+        ecran.unmount()
+      })
+
+      it('position refusée : un trajet calculé ensuite est montré en entier', async () => {
+        const ecran = monterAlAccueil()
+        surEchec!({ code: 1 })
+        await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
         expect(cadrages).toHaveLength(1)
-        expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe('Carte du trajet de Lyon à Vienne')
-        expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeTruthy()
+        // La carte ne suit personne : elle n'est pas recentrée au zoom du suivi.
+        expect(carteAffichee!.getZoom()).not.toBe(16)
+        expect(ecran.find('#annonce-suivi').text()).toContain('la carte montre la France')
         ecran.unmount()
       })
 

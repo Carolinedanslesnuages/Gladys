@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { avancementSurLeTrace, capEntre, distanceEntre, ECART_MAXIMAL_AU_TRAJET_METRES } from '../guidage'
+import {
+  avancementSurLeTrace,
+  capDuTraceDevant,
+  capEntre,
+  distanceEntre,
+  ECART_MAXIMAL_AU_TRAJET_METRES,
+} from '../guidage'
 import type { PointDuTrace } from '../itineraire'
 
 // Trois points plein nord, espacés d'environ 1 112 m (0,01° de latitude).
@@ -40,6 +46,21 @@ describe('Guidage sur le tracé', () => {
     expect(capEntre(centre, { latitude: 45.0, longitude: 5.01 })).toBeCloseTo(90, 0)
     expect(capEntre(centre, { latitude: 44.99, longitude: 5.0 })).toBeCloseTo(180, 1)
     expect(capEntre(centre, { latitude: 45.0, longitude: 4.99 })).toBeCloseTo(270, 0)
+  })
+
+  it('Demande #28 : donne la direction de la route devant la personne', () => {
+    // Le tracé part plein nord.
+    expect(capDuTraceDevant(trace[0]!, trace)).toBeCloseTo(0, 1)
+    // Un tracé qui part plein est, la personne un peu à côté du départ.
+    const versLEst: PointDuTrace[] = [
+      { latitude: 45.0, longitude: 5.0 },
+      { latitude: 45.0, longitude: 5.0001 },
+      { latitude: 45.0, longitude: 5.01 },
+    ]
+    expect(capDuTraceDevant({ latitude: 45.0001, longitude: 5.0 }, versLEst)).toBeCloseTo(90, 0)
+    // À l'arrivée, ou sans trajet : aucune direction.
+    expect(capDuTraceDevant(trace[2]!, trace)).toBeNull()
+    expect(capDuTraceDevant(trace[0]!, [])).toBeNull()
   })
 
   it('sans tracé, aucun avancement', () => {
