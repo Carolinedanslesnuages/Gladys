@@ -22,6 +22,18 @@ export function distanceEntre(premierPoint: Coordonnees, secondPoint: Coordonnee
   return 2 * RAYON_DE_LA_TERRE_METRES * Math.asin(Math.min(1, Math.sqrt(demiCorde)))
 }
 
+/** Direction pour aller d'un point à l'autre, en degrés (0 = nord, 90 = est, 180 = sud, 270 = ouest). */
+export function capEntre(pointDeDepart: Coordonnees, pointDArrivee: Coordonnees): number {
+  const latitudeDepart = enRadians(pointDeDepart.latitude)
+  const latitudeArrivee = enRadians(pointDArrivee.latitude)
+  const ecartLongitude = enRadians(pointDArrivee.longitude - pointDeDepart.longitude)
+  const versLEst = Math.sin(ecartLongitude) * Math.cos(latitudeArrivee)
+  const versLeNord =
+    Math.cos(latitudeDepart) * Math.sin(latitudeArrivee) -
+    Math.sin(latitudeDepart) * Math.cos(latitudeArrivee) * Math.cos(ecartLongitude)
+  return ((Math.atan2(versLEst, versLeNord) * 180) / Math.PI + 360) % 360
+}
+
 export interface Avancement {
   /** Ce qu'il reste à parcourir sur le tracé jusqu'à l'arrivée. */
   distanceRestanteMetres: number

@@ -2,7 +2,12 @@
 export interface Coordonnees {
   latitude: number
   longitude: number
+  /** Direction du déplacement, en degrés (0 = nord, 90 = est), quand l'appareil la connaît. */
+  cap?: number
 }
+
+/** Direction donnée par le GPS : absente à l'arrêt (le téléphone renvoie alors `null` ou `NaN`). */
+const capDuGps = (cap: number | null | undefined) => (typeof cap === 'number' && Number.isFinite(cap) ? cap : undefined)
 
 /** La personne a refusé de donner sa position. */
 export class PositionRefusee extends Error {
@@ -50,7 +55,12 @@ export function suivrePosition(
     return () => {}
   }
   const numeroDeSuivi = navigator.geolocation.watchPosition(
-    (position) => surPosition({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+    (position) =>
+      surPosition({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        cap: capDuGps(position.coords.heading),
+      }),
     (erreurPosition) =>
       surErreur(erreurPosition.code === CODE_PERMISSION_REFUSEE ? new PositionRefusee() : new PositionIndisponible()),
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },

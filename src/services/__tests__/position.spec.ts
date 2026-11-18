@@ -37,6 +37,18 @@ describe('Suivre la position pendant le trajet', () => {
     expect(geolocalisation.clearWatch).toHaveBeenCalledWith(7)
   })
 
+  it('transmet la direction donnée par le GPS, sauf à l’arrêt (direction inconnue)', () => {
+    const { suivi } = simulerGeolocalisation()
+    const positionsRecues: Coordonnees[] = []
+    suivrePosition((coordonnees) => positionsRecues.push(coordonnees), () => {})
+    const enRoute = { latitude: 45.1, longitude: 5.1, heading: 90 }
+    const aLArret = { latitude: 45.1, longitude: 5.1, heading: Number.NaN }
+    suivi.surSucces!({ coords: enRoute } as unknown as { coords: Coordonnees })
+    suivi.surSucces!({ coords: aLArret } as unknown as { coords: Coordonnees })
+    expect(positionsRecues[0]!.cap).toBe(90)
+    expect(positionsRecues[1]!.cap).toBeUndefined()
+  })
+
   it('distingue la position refusée de la position introuvable', () => {
     const { suivi } = simulerGeolocalisation()
     const erreursRecues: Error[] = []

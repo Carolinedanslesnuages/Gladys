@@ -19,6 +19,17 @@ Première marche du guidage, calculée **sur l'appareil** :
 - à plus de **100 m** du tracé, une alerte écrite dit que la personne a quitté son trajet ;
 - un rappel de sécurité : regarder la carte seulement à l'arrêt.
 
+Complément (même demande) : comme Google Maps ou Waze,
+- « Afficher la carte en plein écran » : la carte occupe tout l'écran et démarre le suivi ; le reste
+  de la page est rendu inerte (`inert`) pour garder le clavier dans la carte ; Échap ou « Quitter le
+  plein écran » en sort, le suivi continue. Plein écran fait en CSS (pas l'API Fullscreen, absente
+  sur iPhone) ;
+- le repère « Vous » devient une **flèche** tournée dans le sens de la marche : direction donnée par
+  le GPS (`heading`), sinon celle du dernier déplacement (au moins 5 m) ; un rond tant qu'elle est
+  inconnue ;
+- déplacer la carte (doigt ou flèches) la détache de la personne ; « Me recentrer sur ma position »
+  la ramène dessus.
+
 ## Données personnelles
 La position **ne quitte pas l'appareil** et n'est **pas enregistrée** : elle ne vit qu'en mémoire,
 le temps du suivi. Seules les tuiles du fond de carte autour d'elle sont demandées à l'IGN (comme

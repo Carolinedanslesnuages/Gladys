@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { avancementSurLeTrace, distanceEntre, ECART_MAXIMAL_AU_TRAJET_METRES } from '../guidage'
+import { avancementSurLeTrace, capEntre, distanceEntre, ECART_MAXIMAL_AU_TRAJET_METRES } from '../guidage'
 import type { PointDuTrace } from '../itineraire'
 
 // Trois points plein nord, espacés d'environ 1 112 m (0,01° de latitude).
@@ -32,6 +32,14 @@ describe('Guidage sur le tracé', () => {
     const avancement = avancementSurLeTrace({ latitude: 45.01, longitude: 5.005 }, trace)!
     expect(avancement.ecartAuTrajetMetres).toBeCloseTo(393, -1)
     expect(avancement.horsDuTrajet).toBe(true)
+  })
+
+  it('donne la direction d’un point à l’autre : nord 0°, est 90°, sud 180°, ouest 270°', () => {
+    const centre = { latitude: 45.0, longitude: 5.0 }
+    expect(capEntre(centre, { latitude: 45.01, longitude: 5.0 })).toBeCloseTo(0, 1)
+    expect(capEntre(centre, { latitude: 45.0, longitude: 5.01 })).toBeCloseTo(90, 0)
+    expect(capEntre(centre, { latitude: 44.99, longitude: 5.0 })).toBeCloseTo(180, 1)
+    expect(capEntre(centre, { latitude: 45.0, longitude: 4.99 })).toBeCloseTo(270, 0)
   })
 
   it('sans tracé, aucun avancement', () => {
