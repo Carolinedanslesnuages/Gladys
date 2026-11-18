@@ -57,9 +57,37 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
       ),
     )
     const resultat = await calculerItineraire(lyon, vienne, 30)
-    expect(resultat.itineraire).toEqual({ distanceMetres: 9000, departementaleMetres: 3200 })
+    expect(resultat.itineraire).toMatchObject({ distanceMetres: 9000, departementaleMetres: 3200 })
     expect(estDepartementale('N7')).toBe(false)
     expect(estDepartementale(undefined)).toBe(false)
+  })
+
+  it('Story #4 : demande la vitesse de chaque route et la garde par tronçon', async () => {
+    fetchSimule.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            distance: 3000,
+            portions: [
+              {
+                steps: [
+                  { distance: 1000, attributes: { name: { cpx_numero: '' }, vitesse_moyenne_vl: '30' } },
+                  { distance: 1500, attributes: { name: { cpx_numero: '' }, vitesse_moyenne_vl: 80 } },
+                  { distance: 500, attributes: { name: { cpx_numero: '' } } },
+                ],
+              },
+            ],
+          }),
+        ),
+      ),
+    )
+    const resultat = await calculerItineraire(lyon, vienne, 30)
+    expect(new URL(fetchSimule.mock.calls[0]![0]).searchParams.get('waysAttributes')).toBe('vitesse_moyenne_vl')
+    expect(resultat.itineraire.troncons).toEqual([
+      { distanceMetres: 1000, vitesseRouteKmh: 30 },
+      { distanceMetres: 1500, vitesseRouteKmh: 80 },
+      { distanceMetres: 500, vitesseRouteKmh: null },
+    ])
   })
 
   it('signale l’absence de réseau', async () => {
@@ -68,8 +96,8 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
   })
 
   describe('Critère 2 : on évite les départementales si le détour reste sous le seuil choisi', () => {
-    const direct = { distanceMetres: 10000, departementaleMetres: 4000 }
-    const parLesVillages = { distanceMetres: 12500, departementaleMetres: 0 }
+    const direct = { distanceMetres: 10000, departementaleMetres: 4000, troncons: [] }
+    const parLesVillages = { distanceMetres: 12500, departementaleMetres: 0, troncons: [] }
 
     it('retient le trajet de 12,5 km sans départementale à 30 % (trajet direct : 10 km)', () => {
       expect(choisirItineraire(direct, parLesVillages, 30)).toEqual({
@@ -89,8 +117,8 @@ describe('Calcul d’itinéraire (service de l’IGN)', () => {
   })
 
   it('Critère 4 : sans trajet sans départementale, propose le plus sûr (le moins de départementale)', () => {
-    const direct = { distanceMetres: 10000, departementaleMetres: 4000 }
-    const moinsDeDepartementale = { distanceMetres: 11000, departementaleMetres: 1500 }
+    const direct = { distanceMetres: 10000, departementaleMetres: 4000, troncons: [] }
+    const moinsDeDepartementale = { distanceMetres: 11000, departementaleMetres: 1500, troncons: [] }
     expect(choisirItineraire(direct, moinsDeDepartementale, 10)).toEqual({
       itineraire: moinsDeDepartementale,
       sansDepartementalePossible: false,
