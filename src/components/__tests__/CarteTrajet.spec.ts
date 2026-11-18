@@ -266,10 +266,11 @@ describe('Carte du trajet', () => {
     }
     const repereVous = () => document.querySelector<HTMLElement>('.repere-vous')!
 
-    it('« Vous » est un rond tant que la direction est inconnue, puis une flèche tournée dans le sens de la marche', async () => {
+    it('« Vous » est un véhicule, même sans direction connue, puis tourné dans le sens de la marche', async () => {
       const ecran = monter()
       await boutonNomme(ecran, 'Suivre ma position sur la carte').trigger('click')
       await recevoirPosition(ecran, 45.6, 4.95)
+      expect(repereVous().querySelector('svg.vehicule-vous')).not.toBeNull()
       expect(repereVous().classList.contains('repere-vous--sans-direction')).toBe(true)
       expect(repereVous().textContent).toBe('Vous')
       // Sans direction donnée par le GPS : celle du déplacement (ici, plein sud).
@@ -323,6 +324,37 @@ describe('Carte du trajet', () => {
         expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeTruthy()
         await recevoirPosition(ecran, 45.6, 4.95)
         expect(ecran.find('#avancement-trajet').text()).toContain('Il vous reste 10,9 km')
+        ecran.unmount()
+      })
+
+      it('Demande #26 : la personne reste au centre quand la carte change de taille (distance restante qui apparaît)', async () => {
+        let surChangementDeTaille: (() => void) | null = null
+        // jsdom ne joue pas les animations : on simule « réduire les animations ».
+        vi.stubGlobal('matchMedia', (requete: string) => ({ matches: requete.includes('reduce') }))
+        vi.stubGlobal(
+          'ResizeObserver',
+          class {
+            rappel: () => void
+            constructor(rappel: () => void) {
+              this.rappel = rappel
+            }
+            observe(element: Element) {
+              if (element.id === 'carte-trajet') surChangementDeTaille = this.rappel
+            }
+            unobserve() {}
+            disconnect() {}
+          },
+        )
+        const ecran = monterDansUnePage()
+        await boutonNomme(ecran, 'Afficher la carte en plein écran').trigger('click')
+        await ecran.vm.$nextTick()
+        await recevoirPosition(ecran, 45.6, 4.95)
+        // La distance restante s'affiche au-dessus : la carte perd de la hauteur.
+        // (une taille neuve à chaque appel : Leaflet modifie parfois le point reçu)
+        vi.spyOn(Leaflet.Map.prototype, 'getSize').mockImplementation(() => Leaflet.point(1280, 520))
+        surChangementDeTaille!()
+        expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.6, 4)
+        expect(carteAffichee!.getCenter().lng).toBeCloseTo(4.95, 4)
         ecran.unmount()
       })
 

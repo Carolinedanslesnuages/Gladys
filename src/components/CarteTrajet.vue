@@ -4,8 +4,8 @@
  * et « Arrivée ». Déplaçable et zoomable aux doigts, au clavier (flèches, + et −) et par deux
  * boutons. Sans réseau, le fond de carte est indisponible : un message le dit. La liste des étapes,
  * affichée sous la carte, en reste l'alternative écrite. Décision : docs/adr/0006-carte-du-trajet.md.
- * Pendant le trajet, la carte peut suivre la position de la personne, comme un GPS : flèche « Vous »
- * tournée dans le sens de la marche, plein écran, bouton pour se recentrer, distance restante,
+ * Pendant le trajet, la carte peut suivre la position de la personne, comme un GPS : véhicule « Vous »
+ * au centre, tourné dans le sens de la marche, plein écran, bouton pour se recentrer, distance restante,
  * alerte si elle quitte le trajet. Décision : docs/adr/0008-guidage-sur-la-carte.md.
  * Fond OpenStreetMap plutôt que Plan IGN : docs/adr/0009-fond-de-carte-openstreetmap.md.
  */
@@ -28,6 +28,7 @@ const MENTION_OPENSTREETMAP =
 const conteneurCarte = ref<HTMLElement | null>(null)
 const zoneCarte = ref<HTMLElement | null>(null)
 let carte: Leaflet.Map | null = null
+let observateurDeTaille: ResizeObserver | null = null
 
 const animationsReduites = () =>
   typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -36,16 +37,20 @@ const animationsReduites = () =>
 const repere = (libelle: string) =>
   Leaflet.divIcon({ className: 'repere-carte', html: `<span class="etiquette-repere">${libelle}</span>`, iconSize: [0, 0] })
 
-/** Repère de la personne : une flèche tournée dans le sens de la marche (un rond tant qu'elle est inconnue), et « Vous ». */
+/**
+ * Repère de la personne : son véhicule vu de dessus, centré sur sa position, tourné dans le sens de
+ * la marche (vers le haut tant que la direction est inconnue), et « Vous » écrit dessous.
+ */
 const repereDeLaPersonneIcone = () =>
   Leaflet.divIcon({
     className: 'repere-carte',
     iconSize: [0, 0],
     html:
       '<span class="repere-vous repere-vous--sans-direction">' +
-      '<svg class="fleche-vous" viewBox="0 0 32 32" width="40" height="40" aria-hidden="true" focusable="false">' +
-      '<path d="M16 2 L28 29 L16 22 L4 29 Z" /></svg>' +
-      '<span class="point-vous"></span>' +
+      '<svg class="vehicule-vous" viewBox="0 0 32 32" width="40" height="40" aria-hidden="true" focusable="false">' +
+      '<rect class="carrosserie-vous" x="8" y="3" width="16" height="26" rx="6" />' +
+      '<path class="vitre-vous" d="M11 10 Q16 7.5 21 10 L20 14 L12 14 Z" />' +
+      '<path class="vitre-vous" d="M12 22 L20 22 L21 25 Q16 26.5 11 25 Z" /></svg>' +
       '<span class="etiquette-repere">Vous</span></span>',
   })
 
@@ -78,11 +83,22 @@ function creerCarte(conteneur: HTMLElement): void {
   conteneur.addEventListener('keydown', (evenement) => {
     if (TOUCHES_DE_DEPLACEMENT.includes(evenement.key)) detacherLaCarte()
   })
+  // La carte change de taille sans que la fenêtre bouge (plein écran, distance restante qui
+  // apparaît au-dessus…) : Leaflet doit le savoir, puis la personne est remise au centre.
+  if (typeof ResizeObserver === 'function') {
+    observateurDeTaille = new ResizeObserver(() => {
+      carte?.invalidateSize({ pan: false })
+      garderLaPersonneAuCentre()
+    })
+    observateurDeTaille.observe(conteneur)
+  }
 }
 
 function retirerCarte(): void {
   quitterLePleinEcran()
   arreterLeSuivi()
+  observateurDeTaille?.disconnect()
+  observateurDeTaille = null
   carte?.remove()
   carte = null
 }
@@ -161,6 +177,12 @@ function placerLaPersonne(coordonnees: Coordonnees): void {
   }
   if (carteCentreeSurLaPersonne.value)
     carte.setView(point, premierePosition ? ZOOM_DU_SUIVI : carte.getZoom(), { animate: !animationsReduites() })
+}
+
+/** Après un changement de taille de la carte, la personne suivie reste au centre, sans animation. */
+function garderLaPersonneAuCentre(): void {
+  if (!carte || !suiviActif.value || !carteCentreeSurLaPersonne.value || !positionSuivie.value) return
+  carte.panTo(Leaflet.latLng(positionSuivie.value.latitude, positionSuivie.value.longitude), { animate: false })
 }
 
 function detacherLaCarte(): void {
@@ -246,7 +268,7 @@ async function entrerEnPleinEcran(): Promise<void> {
   if (suiviActif.value) recentrerSurLaPersonne()
   else demarrerLeSuivi()
   await nextTick()
-  carte?.invalidateSize()
+  carte?.invalidateSize({ pan: false })
   if (zoneCarte.value) mettreDeCoteLeResteDeLaPage(zoneCarte.value)
   document.getElementById('bouton-quitter-plein-ecran')?.focus()
 }
@@ -258,7 +280,7 @@ async function quitterLePleinEcran(): Promise<void> {
   window.removeEventListener('keydown', sortirAvecEchap)
   remettreLeResteDeLaPage()
   await nextTick()
-  carte?.invalidateSize()
+  carte?.invalidateSize({ pan: false })
   document.getElementById('bouton-plein-ecran')?.focus()
 }
 
@@ -406,7 +428,7 @@ const nomDeLaCarte = () => `Carte du trajet de ${props.depart.libelle} à ${prop
   font-size: 0.875rem;
   transform: translate(-50%, -50%);
 }
-/* Repère de la personne : la flèche est centrée sur sa position, « Vous » écrit dessous. */
+/* Repère de la personne : le véhicule (40 px) est centré sur sa position, « Vous » écrit dessous. */
 .carte-trajet :deep(.repere-vous) {
   position: absolute;
   left: 0;
@@ -419,31 +441,20 @@ const nomDeLaCarte = () => `Carte du trajet de ${props.depart.libelle} à ${prop
 .carte-trajet :deep(.repere-vous .etiquette-repere) {
   transform: none;
 }
-.carte-trajet :deep(.fleche-vous) {
+.carte-trajet :deep(.vehicule-vous) {
   transform: rotate(var(--direction-vous, 0deg));
-  fill: var(--background-action-high-blue-france);
-  stroke: var(--background-default-grey);
-  stroke-width: 2.5;
-  stroke-linejoin: round;
   transition: transform 0.3s ease-out;
 }
-.carte-trajet :deep(.point-vous) {
-  display: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  margin: 0.5rem;
-  border: 3px solid var(--background-default-grey);
-  border-radius: 50%;
-  background: var(--background-action-high-blue-france);
+.carte-trajet :deep(.carrosserie-vous) {
+  fill: var(--background-action-high-blue-france);
+  stroke: var(--background-default-grey);
+  stroke-width: 2;
 }
-.carte-trajet :deep(.repere-vous--sans-direction .fleche-vous) {
-  display: none;
-}
-.carte-trajet :deep(.repere-vous--sans-direction .point-vous) {
-  display: block;
+.carte-trajet :deep(.vitre-vous) {
+  fill: var(--background-default-grey);
 }
 @media (prefers-reduced-motion: reduce) {
-  .carte-trajet :deep(.fleche-vous) {
+  .carte-trajet :deep(.vehicule-vous) {
     transition: none;
   }
 }
