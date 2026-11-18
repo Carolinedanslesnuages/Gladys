@@ -7,11 +7,14 @@ import Bouton from '@/components/interface/Bouton.vue'
 import { distanceLisible } from '@/services/consignes'
 import { useConduiteStore } from '@/stores/conduite'
 import { useItineraireStore } from '@/stores/itineraire'
+import { useVoixStore } from '@/stores/voix'
 
 const routeur = useRouter()
 const magasinConduite = useConduiteStore()
 const { etat, consigne, consignesAbsentes, voixAbsente } = storeToRefs(magasinConduite)
 const { resultat } = storeToRefs(useItineraireStore())
+const magasinVoix = useVoixStore()
+const { active: voixActive, erreur: erreurVoix } = storeToRefs(magasinVoix)
 
 const trajetAbsent = computed(() => !resultat.value)
 
@@ -85,6 +88,17 @@ onUnmounted(() => magasinConduite.arreter())
         </p>
       </section>
       <p id="annonce-consigne" role="status" class="visuellement-cache">{{ annonce }}</p>
+      <div class="commande-voix marge-haut-6">
+        <Bouton
+          id="bouton-voix"
+          type="button"
+          variante="secondaire"
+          :label="voixActive ? 'Couper la voix' : 'Remettre la voix'"
+          @click="magasinVoix.basculer()"
+        />
+        <p id="etat-voix" role="status" class="texte-gras">{{ voixActive ? 'Voix active' : 'Voix coupée' }}</p>
+      </div>
+      <p v-if="erreurVoix" id="erreur-voix" role="status">{{ erreurVoix }}</p>
       <div role="status">
         <Alerte
           v-if="voixAbsente"
@@ -124,6 +138,15 @@ onUnmounted(() => magasinConduite.arreter())
   font-size: clamp(1.75rem, 8vw, 3rem);
   font-weight: 700;
   color: var(--vert-route-fonce);
+}
+.commande-voix {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+.commande-voix p {
+  margin: 0;
 }
 .position-indisponible {
   border: 2px solid var(--erreur);

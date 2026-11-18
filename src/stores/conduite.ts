@@ -4,6 +4,7 @@ import { consigneALaPosition, consignesDisponibles, phraseAnnoncee } from '@/ser
 import { DISTANCE_D_ANNONCE_METRES, direALaVoix } from '@/services/voix'
 import { PositionRefusee, suivrePosition, type Coordonnees } from '@/services/position'
 import { useItineraireStore } from '@/stores/itineraire'
+import { useVoixStore } from '@/stores/voix'
 
 /** Où en est le suivi : pas lancé, en attente de la première position, en cours, ou en échec. */
 export type EtatDuSuivi = 'arret' | 'attente' | 'en-cours' | 'refuse' | 'indisponible'
@@ -43,6 +44,11 @@ export const useConduiteStore = defineStore('conduite', () => {
   function annoncerLaConsigne(): void {
     const consigneCourante = consigne.value
     if (!consigneCourante || consigneCourante.distanceMetres > DISTANCE_D_ANNONCE_METRES) return
+    // Voix coupée : rien n'est dit ; la consigne sera dite si la voix est remise avant le virage.
+    if (!useVoixStore().active) {
+      voixAbsente.value = false
+      return
+    }
     const identifiant = `${consigneCourante.rangEtape}|${consigneCourante.texte}`
     if (identifiant === derniereConsigneDite) return
     derniereConsigneDite = identifiant

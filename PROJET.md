@@ -20,3 +20,4 @@
 - #6 Garder mon trajet hors connexion — [fiche](revues/story-6-garder-mon-trajet-hors-connexion.md)
 - #37 Suivre ma position et afficher la consigne en grand — [fiche](revues/story-37-suivre-ma-position-et-afficher-la-consig.md)
 - #38 Annoncer chaque consigne à la voix — [fiche](revues/story-38-annoncer-chaque-consigne-a-la-voix.md)
+- #39 Couper ou remettre la voix d'un seul bouton — [fiche](revues/story-39-couper-ou-remettre-la-voix-d-un-seul-bou.md)

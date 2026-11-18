@@ -11,6 +11,11 @@ export type ResultatDeLAnnonce = 'dite' | 'voix-absente'
 
 const estFrancaise = (voix: SpeechSynthesisVoice): boolean => voix.lang.toLowerCase().startsWith('fr')
 
+/** Arrête aussitôt la consigne en train d'être dite, s'il y en a une. */
+export function taireLaVoix(): void {
+  if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+}
+
 /**
  * Dit la phrase avec une voix française de l'appareil. `voix-absente` si le téléphone n'en a pas
  * (ou pas de synthèse vocale du tout) : à l'appelant d'en informer l'utilisateur.
