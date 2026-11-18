@@ -83,6 +83,8 @@ export interface Consigne {
   distanceMetres: number
   /** Vrai pour la dernière : l'arrivée. */
   estLArrivee: boolean
+  /** Rang de l'étape qui se termine par cette consigne : distingue deux consignes au texte identique. */
+  rangEtape: number
 }
 
 /** « vers Saint-Martin » si le village change, sinon « sur la D12 ». */
@@ -91,11 +93,11 @@ function destinationDuVirage(etapeCourante: Etape, etapeSuivante: Etape): string
   return `sur ${etapeSuivante.route}`
 }
 
-function consigneALaFinDeLEtape(etapes: Etape[], rangEtape: number): { texte: string; estLArrivee: boolean } {
+function consigneALaFinDeLEtape(etapes: Etape[], rangEtape: number): Omit<Consigne, 'distanceMetres'> {
   const etapeSuivante = etapes[rangEtape + 1]
-  if (!etapeSuivante) return { texte: 'Vous arrivez à destination', estLArrivee: true }
+  if (!etapeSuivante) return { texte: 'Vous arrivez à destination', estLArrivee: true, rangEtape }
   const verbe = VERBES_DE_VIRAGE[etapes[rangEtape]!.virageALaFin ?? 'tout-droit']
-  return { texte: `${verbe} ${destinationDuVirage(etapes[rangEtape]!, etapeSuivante)}`, estLArrivee: false }
+  return { texte: `${verbe} ${destinationDuVirage(etapes[rangEtape]!, etapeSuivante)}`, estLArrivee: false, rangEtape }
 }
 
 const distanceSurLeTrace = (trace: PointDuTrace[], rangDeDepart: number, rangDArrivee: number): number => {
@@ -130,6 +132,12 @@ export function consigneALaPosition(position: Coordonnees, etapes: Etape[], trac
     return { ...consigneALaFinDeLEtape(etapes, rangEtape), distanceMetres: distanceALaFinSuivante }
   }
   return { ...consigneALaFinDeLEtape(etapes, rangEtape), distanceMetres: distanceALaFin }
+}
+
+/** La phrase dite à voix haute : « Dans 200 m, tournez à droite vers Saint-Martin ». */
+export function phraseAnnoncee(consigne: Consigne): string {
+  const texteEnMinuscule = consigne.texte.charAt(0).toLowerCase() + consigne.texte.slice(1)
+  return `Dans ${distanceLisible(consigne.distanceMetres)}, ${texteEnMinuscule}`
 }
 
 /** Distance lisible d'un coup d'œil : « 350 m » (à 10 m près), puis « 1,2 km ». */

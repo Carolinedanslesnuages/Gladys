@@ -134,6 +134,18 @@ describe('Écran de conduite', () => {
     ecran.unmount()
   })
 
+  it('sans voix française, un message annoncé le dit et la consigne reste affichée', async () => {
+    demarrer()
+    const ecran = await monterEnConduite()
+    surPosition({ coords: { latitude: 45.0092, longitude: 4 } })
+    await flushPromises()
+    expect(ecran.find('#voix-absente').text()).toContain('Pas de voix française')
+    expect(ecran.find('#voix-absente').element.parentElement?.getAttribute('role')).toBe('status')
+    expect(ecran.find('#consigne-en-cours').text()).toBe('Tournez à droite vers Saint-Martin')
+    expect(await violationsAccessibilite(document.body)).toEqual([])
+    ecran.unmount()
+  })
+
   it('aucune violation d’accessibilité automatique, à chaque état', async () => {
     demarrer()
     const ecran = await monterEnConduite()

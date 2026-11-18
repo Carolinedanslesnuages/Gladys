@@ -1,6 +1,7 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { consigneALaPosition, consignesDisponibles } from '@/services/consignes'
+import { consigneALaPosition, consignesDisponibles, phraseAnnoncee } from '@/services/consignes'
+import { DISTANCE_D_ANNONCE_METRES, direALaVoix } from '@/services/voix'
 import { PositionRefusee, suivrePosition, type Coordonnees } from '@/services/position'
 import { useItineraireStore } from '@/stores/itineraire'
 
@@ -17,6 +18,10 @@ export const useConduiteStore = defineStore('conduite', () => {
   const position = ref<Coordonnees | null>(null)
   /** Vrai : le trajet n'a pas ses consignes (enregistré avant leur arrivée) ; il faut le recalculer. */
   const consignesAbsentes = ref(false)
+  /** Vrai : l'appareil n'a pas de voix française ; les consignes restent à l'écran, sans voix. */
+  const voixAbsente = ref(false)
+  /** Seule mémoire de la voix : la dernière consigne dite (étape et texte), pour ne pas la répéter. */
+  let derniereConsigneDite: string | null = null
   let arreterLeSuivi: (() => void) | null = null
 
   const consigne = computed(() => {
@@ -30,6 +35,18 @@ export const useConduiteStore = defineStore('conduite', () => {
     arreterLeSuivi = null
     etat.value = 'arret'
     position.value = null
+    derniereConsigneDite = null
+    voixAbsente.value = false
+  }
+
+  /** Dit la consigne une seule fois, quand le virage est à 200 m ou moins. */
+  function annoncerLaConsigne(): void {
+    const consigneCourante = consigne.value
+    if (!consigneCourante || consigneCourante.distanceMetres > DISTANCE_D_ANNONCE_METRES) return
+    const identifiant = `${consigneCourante.rangEtape}|${consigneCourante.texte}`
+    if (identifiant === derniereConsigneDite) return
+    derniereConsigneDite = identifiant
+    voixAbsente.value = direALaVoix(phraseAnnoncee(consigneCourante)) === 'voix-absente'
   }
 
   /** Lance le suivi de la position pour le trajet affiché. Sans trajet ou sans consignes, rien ne démarre. */
@@ -43,6 +60,7 @@ export const useConduiteStore = defineStore('conduite', () => {
       (nouvellePosition) => {
         position.value = nouvellePosition
         etat.value = 'en-cours'
+        annoncerLaConsigne()
       },
       (erreur) => {
         arreterLeSuivi?.()
@@ -52,7 +70,7 @@ export const useConduiteStore = defineStore('conduite', () => {
     )
   }
 
-  return { etat, position, consigne, consignesAbsentes, demarrer, reessayer: demarrer, arreter }
+  return { etat, position, consigne, consignesAbsentes, voixAbsente, demarrer, reessayer: demarrer, arreter }
 })
 
 if (import.meta.hot) import.meta.hot.accept(acceptHMRUpdate(useConduiteStore, import.meta.hot))

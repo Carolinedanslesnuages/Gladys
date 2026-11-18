@@ -96,3 +96,54 @@ describe('Store de conduite', () => {
     expect(conduite.consignesAbsentes).toBe(false)
   })
 })
+
+describe('Voix des consignes', () => {
+  const dire = vi.fn<(enonce: { text: string }) => void>()
+  class EnonceSimule {
+    voice: unknown = null
+    lang = ''
+    constructor(public text: string) {}
+  }
+  beforeEach(() => {
+    dire.mockClear()
+    vi.stubGlobal('SpeechSynthesisUtterance', EnonceSimule)
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: { getVoices: () => [{ lang: 'fr-FR', localService: true }], speak: dire, cancel: () => {} },
+    })
+  })
+  afterEach(() => Reflect.deleteProperty(window, 'speechSynthesis'))
+
+  it('dit la consigne en français à 200 m du virage', () => {
+    demarrerAvecUnTrajet()
+    surPosition({ coords: { latitude: 45, longitude: 4 } })
+    expect(dire).not.toHaveBeenCalled()
+    surPosition({ coords: { latitude: 45.0092, longitude: 4 } })
+    expect(dire).toHaveBeenCalledTimes(1)
+    expect(dire.mock.calls[0]![0].text).toMatch(/^Dans 1\d0 m, tournez à droite vers Saint-Martin$/)
+  })
+
+  it('ne répète pas la même consigne, puis dit la suivante', () => {
+    const conduite = demarrerAvecUnTrajet()
+    surPosition({ coords: { latitude: 45.0092, longitude: 4 } })
+    surPosition({ coords: { latitude: 45.0093, longitude: 4 } })
+    surPosition({ coords: { latitude: 45.0094, longitude: 4 } })
+    expect(dire).toHaveBeenCalledTimes(1)
+    surPosition({ coords: { latitude: 45.0098, longitude: 4 } })
+    expect(conduite.consigne?.texte).toBe('Vous arrivez à destination')
+    expect(dire).toHaveBeenCalledTimes(1)
+    surPosition({ coords: { latitude: 45.01, longitude: 4.0088 } })
+    expect(dire).toHaveBeenCalledTimes(2)
+    expect(dire.mock.calls[1]![0].text).toContain('vous arrivez à destination')
+  })
+
+  it('sans voix française, le dit et garde la consigne affichée', () => {
+    Reflect.deleteProperty(window, 'speechSynthesis')
+    const conduite = demarrerAvecUnTrajet()
+    surPosition({ coords: { latitude: 45, longitude: 4 } })
+    expect(conduite.voixAbsente).toBe(false)
+    surPosition({ coords: { latitude: 45.0092, longitude: 4 } })
+    expect(conduite.voixAbsente).toBe(true)
+    expect(conduite.consigne?.texte).toBe('Tournez à droite vers Saint-Martin')
+  })
+})
