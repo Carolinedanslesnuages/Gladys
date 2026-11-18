@@ -46,6 +46,10 @@ describe('Nom de l’application : GLADYS', () => {
     expect(application.find('header').exists()).toBe(false)
     expect(application.find('footer').exists()).toBe(false)
     expect(application.find('main#contenu').exists()).toBe(true)
+    // À l'ouverture, la question sur le véhicule est posée dans une fenêtre : on la ferme d'abord.
+    expect(document.querySelector('dialog')?.textContent).toContain('Mon véhicule')
+    document.querySelector<HTMLButtonElement>('dialog button')?.click()
+    await flushPromises()
     await application.find('#bouton-a-propos').trigger('click')
     await flushPromises()
     expect(document.querySelector('dialog')?.textContent).toContain('Sans permis, en toute sécurité')
