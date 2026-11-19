@@ -17,7 +17,8 @@
   "controlesRequis": [
     "Anti-fuite (gitleaks)",
     "Application mobile (lint, types, tests dont accessibilité, compilation)",
-    "Titre de PR (Conventional Commits, semver)"
+    "Titre de PR (Conventional Commits, semver)",
+    "Taille des fichiers (une responsabilité par fichier)"
   ],
   "controles": [
     "cd /app && npx oxlint . && npx eslint . && npm run type-check && npm run test:unit -- --run && npm run build-only"
