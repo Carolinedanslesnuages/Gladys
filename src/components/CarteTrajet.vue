@@ -220,7 +220,7 @@ const dezoomer = () => carte?.zoomOut(1, { animate: !animationsReduites() })
 /** Zoom du suivi : on lit le nom des rues autour de soi. */
 const ZOOM_DU_SUIVI = 16
 /** Zoom après « Me recentrer » : la voiture est vue de près, comme dans Google Maps ou Waze. */
-const ZOOM_DU_RECENTRAGE = 18
+const ZOOM_DU_RECENTRAGE = 19
 /** En dessous de ce déplacement, on garde la direction précédente (le GPS « tremble » à l'arrêt). */
 const DEPLACEMENT_MINIMAL_POUR_LA_DIRECTION_METRES = 5
 const suiviActif = ref(false)
