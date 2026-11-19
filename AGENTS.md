@@ -89,6 +89,7 @@ Conventional Commits, versions SemVer calculées par release-please (jamais à l
 d'une issue GitHub : `Closes #<numéro>` dans le corps.
 
 ## Règles absolues
+- **Un fichier, une responsabilité** : au plus 400 lignes non vides par fichier de code, 600 par fichier de test (contrôle « Taille des fichiers » en CI). Découper par responsabilité, jamais une fonction par fichier ; un fichier déjà trop long ne grossit plus.
 - Aucune donnée réelle, aucun secret dans le dépôt (gitleaks bloque en local et en CI ; `--no-verify` interdit).
 - Une branche par story (`story/…`) ou par bug (`fix/…`) ; jamais de fusion par l'agent.
 - Les décisions d'architecture sont tracées dans `docs/adr/`.
