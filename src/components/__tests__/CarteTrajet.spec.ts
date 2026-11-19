@@ -236,7 +236,7 @@ describe('Carte du trajet', () => {
         'Votre position',
       ])
       expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.6, 3)
-      expect(carteAffichee!.getZoom()).toBe(16)
+      expect(carteAffichee!.getZoom()).toBe(18)
       expect(ecran.find('#annonce-suivi').text()).toBe('Position trouvée : la carte vous suit.')
       // Du point du milieu jusqu'à Vienne : environ 10,9 km.
       expect(ecran.find('#avancement-trajet').text()).toContain(
@@ -370,7 +370,7 @@ describe('Carte du trajet', () => {
       expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.7, 3)
       await boutonNomme(ecran, 'Me recentrer sur ma position').trigger('click')
       expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.59, 3)
-      expect(carteAffichee!.getZoom()).toBe(25)
+      expect(carteAffichee!.getZoom()).toBe(18)
       expect(ecran.find('#annonce-suivi').text()).toBe('Carte recentrée : la carte vous suit.')
       ecran.unmount()
     })
@@ -474,7 +474,7 @@ describe('Carte du trajet', () => {
         await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
         const [centreDemande, zoom] = vi.mocked(Leaflet.Map.prototype.setView).mock.lastCall!
         // Au zoom du suivi, centré un peu devant la voiture (à moins de 200 m) : pas le trajet entier.
-        expect(zoom).toBe(25)
+        expect(zoom).toBe(18)
         const centre = Leaflet.latLng(centreDemande)
         expect(
           distanceEntre(
@@ -641,7 +641,7 @@ describe('Carte du trajet', () => {
         expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe(
           'Carte du trajet de Lyon à Vienne',
         )
-        expect(carteAffichee!.getZoom()).toBe(25)
+        expect(carteAffichee!.getZoom()).toBe(18)
         expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeUndefined()
         ecran.unmount()
       })
@@ -652,7 +652,7 @@ describe('Carte du trajet', () => {
         await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
         expect(cadrages).toHaveLength(1)
         // La carte ne suit personne : elle n'est pas recentrée au zoom du suivi.
-        expect(carteAffichee!.getZoom()).not.toBe(16)
+        expect(carteAffichee!.getZoom()).not.toBe(18)
         expect(ecran.find('#annonce-suivi').text()).toContain('la carte montre la France')
         ecran.unmount()
       })
