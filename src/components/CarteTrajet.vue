@@ -219,6 +219,8 @@ const dezoomer = () => carte?.zoomOut(1, { animate: !animationsReduites() })
 // Suivi de la position pendant le trajet (comme un GPS). La position reste sur l'appareil.
 /** Zoom du suivi : on lit le nom des rues autour de soi. */
 const ZOOM_DU_SUIVI = 16
+/** Zoom après « Me recentrer » : la voiture est vue de près, comme dans Google Maps ou Waze. */
+const ZOOM_DU_RECENTRAGE = 18
 /** En dessous de ce déplacement, on garde la direction précédente (le GPS « tremble » à l'arrêt). */
 const DEPLACEMENT_MINIMAL_POUR_LA_DIRECTION_METRES = 5
 const suiviActif = ref(false)
@@ -359,7 +361,7 @@ function recentrerSurLaPersonne(): void {
   orienterLaCarte()
   if (carte && positionSuivie.value) {
     const point = Leaflet.latLng(positionSuivie.value.latitude, positionSuivie.value.longitude)
-    carte.setView(centreQuiMontreLaRouteDevant(point, ZOOM_DU_SUIVI), ZOOM_DU_SUIVI, {
+    carte.setView(centreQuiMontreLaRouteDevant(point, ZOOM_DU_RECENTRAGE), ZOOM_DU_RECENTRAGE, {
       animate: !animationsReduites(),
     })
   }
