@@ -21,3 +21,4 @@
 - #37 Suivre ma position et afficher la consigne en grand — [fiche](revues/story-37-suivre-ma-position-et-afficher-la-consig.md)
 - #38 Annoncer chaque consigne à la voix — [fiche](revues/story-38-annoncer-chaque-consigne-a-la-voix.md)
 - #39 Couper ou remettre la voix d'un seul bouton — [fiche](revues/story-39-couper-ou-remettre-la-voix-d-un-seul-bou.md)
+- #40 Me ramener vers le village suivant si je quitte le trajet — [fiche](revues/story-40-me-ramener-vers-le-village-suivant-si-je.md)

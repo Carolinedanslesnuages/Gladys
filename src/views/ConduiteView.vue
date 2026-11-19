@@ -15,7 +15,8 @@ import { useVoixStore } from '@/stores/voix'
 
 const routeur = useRouter()
 const magasinConduite = useConduiteStore()
-const { etat, consigne, consignesAbsentes, voixAbsente } = storeToRefs(magasinConduite)
+const { etat, consigne, consignesAbsentes, voixAbsente, recalcul, villageVise } = storeToRefs(magasinConduite)
+const destinationDuRecalcul = computed(() => villageVise.value ?? 'l’arrivée')
 const { resultat } = storeToRefs(useItineraireStore())
 const magasinVoix = useVoixStore()
 const { active: voixActive, erreur: erreurVoix } = storeToRefs(magasinVoix)
@@ -167,6 +168,48 @@ onUnmounted(() => magasinConduite.arreter())
           description="Pas de voix française sur cet appareil : les consignes ne sont pas dites à voix haute. Elles restent affichées à l’écran."
         />
       </div>
+      <div id="recalcul" role="status">
+        <Alerte
+          v-if="recalcul === 'en-cours'"
+          id="recalcul-en-cours"
+          type="warning"
+          :description="`Vous avez quitté le trajet. Je cherche un nouveau chemin vers ${destinationDuRecalcul}…`"
+        />
+        <Alerte
+          v-else-if="recalcul === 'refait'"
+          id="recalcul-fait"
+          type="info"
+          :description="`Nouveau chemin calculé vers ${destinationDuRecalcul}. Les consignes repartent dessus.`"
+        />
+        <Alerte
+          v-else-if="recalcul === 'a-accepter'"
+          id="recalcul-plus-sur"
+          type="warning"
+          :description="`Aucun chemin vers ${destinationDuRecalcul} n’évite les départementales à fort trafic. Voici le plus sûr.`"
+        />
+        <Alerte
+          v-else-if="recalcul === 'sans-reseau'"
+          id="recalcul-sans-reseau"
+          type="error"
+          description="Vous avez quitté le trajet, mais il n’y a pas de réseau : je ne peux pas recalculer le chemin. Le trajet d’origine reste affiché."
+        />
+      </div>
+      <Bouton
+        v-if="recalcul === 'a-accepter'"
+        id="bouton-suivre-chemin-plus-sur"
+        type="button"
+        icone="position"
+        label="Suivre le chemin le plus sûr"
+        @click="magasinConduite.accepterLeCheminPropose()"
+      />
+      <Bouton
+        v-if="recalcul === 'sans-reseau'"
+        id="bouton-reessayer-recalcul"
+        type="button"
+        variante="secondaire"
+        label="Réessayer le recalcul"
+        @click="magasinConduite.recalculer()"
+      />
     </template>
 
     <div v-if="!trajetAbsent" class="carte-conduite">
