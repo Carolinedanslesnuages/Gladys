@@ -92,11 +92,16 @@ const repereDeLaPersonneIcone = () =>
     iconSize: [0, 0],
     html:
       '<span class="repere-vous repere-vous--sans-direction">' +
-      // Une voiture sans permis : courte, presque aussi large que longue, en 24 px.
+      // Une voiture vue de dessus : quatre roues qui dépassent, des rétroviseurs, un capot qui
+      // s'affine vers l'avant (en haut) et un pare-brise. Rien d'une locomotive.
       '<svg class="vehicule-vous" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true" focusable="false">' +
-      '<rect class="carrosserie-vous" x="7" y="5" width="18" height="22" rx="7" />' +
-      '<path class="vitre-vous" d="M10.5 12 Q16 8.5 21.5 12 L20.5 16 L11.5 16 Z" />' +
-      '<path class="vitre-vous" d="M12 22 L20 22 L20.5 24 Q16 25.5 11.5 24 Z" /></svg>' +
+      '<rect class="roue-vous" x="4.5" y="7" width="4" height="7" rx="1.5" />' +
+      '<rect class="roue-vous" x="23.5" y="7" width="4" height="7" rx="1.5" />' +
+      '<rect class="roue-vous" x="4.5" y="19" width="4" height="7" rx="1.5" />' +
+      '<rect class="roue-vous" x="23.5" y="19" width="4" height="7" rx="1.5" />' +
+      '<path class="carrosserie-vous" d="M16 2.5 C21.5 2.5 24.5 5 24.5 9 L25.5 14 L25.5 25 Q25.5 29.5 21 29.5 L11 29.5 Q6.5 29.5 6.5 25 L6.5 14 L7.5 9 C7.5 5 10.5 2.5 16 2.5 Z" />' +
+      '<path class="vitre-vous" d="M9.5 13.5 Q16 10 22.5 13.5 L21.5 17.5 L10.5 17.5 Z" />' +
+      '<path class="vitre-vous" d="M11 24 L21 24 L21.5 26 Q16 27.5 10.5 26 Z" /></svg>' +
       '<span class="visuellement-cache">Votre position</span></span>',
   })
 
@@ -719,6 +724,11 @@ const nomDeLaCarte = () =>
 }
 .carte-trajet :deep(.vitre-vous) {
   fill: var(--fond);
+}
+.carte-trajet :deep(.roue-vous) {
+  fill: var(--fond);
+  stroke: var(--vert-route);
+  stroke-width: 1.5;
 }
 @media (prefers-reduced-motion: reduce) {
   .carte-trajet :deep(.vehicule-vous) {
