@@ -126,7 +126,12 @@ function creerCarte(conteneur: HTMLElement): void {
     shiftKeyRotate: false,
   })
   Leaflet.control.attribution({ prefix: false }).addAttribution(MENTION_OPENSTREETMAP).addTo(carte)
-  Leaflet.tileLayer(FOND_OPENSTREETMAP, { minZoom: 6, maxZoom: 19, tileSize: 256 }).addTo(carte)
+  Leaflet.tileLayer(FOND_OPENSTREETMAP, {
+    minZoom: 6,
+    maxZoom: 20,
+    maxNativeZoom: 19,
+    tileSize: 256,
+  }).addTo(carte)
   coucheDuTrajet = Leaflet.layerGroup().addTo(carte)
   if (aUnTrajet.value) dessinerLeTrajet()
   else carte.setView(CENTRE_DE_LA_FRANCE, ZOOM_DE_LA_FRANCE, { animate: false })
@@ -220,7 +225,7 @@ const dezoomer = () => carte?.zoomOut(1, { animate: !animationsReduites() })
 /** Zoom du suivi : on lit le nom des rues autour de soi. */
 const ZOOM_DU_SUIVI = 16
 /** Zoom après « Me recentrer » : la voiture est vue de près, comme dans Google Maps ou Waze. */
-const ZOOM_DU_RECENTRAGE = 19
+const ZOOM_DU_RECENTRAGE = 20
 /** En dessous de ce déplacement, on garde la direction précédente (le GPS « tremble » à l'arrêt). */
 const DEPLACEMENT_MINIMAL_POUR_LA_DIRECTION_METRES = 5
 const suiviActif = ref(false)

@@ -370,7 +370,7 @@ describe('Carte du trajet', () => {
       expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.7, 3)
       await boutonNomme(ecran, 'Me recentrer sur ma position').trigger('click')
       expect(carteAffichee!.getCenter().lat).toBeCloseTo(45.59, 3)
-      expect(carteAffichee!.getZoom()).toBe(19)
+      expect(carteAffichee!.getZoom()).toBe(20)
       expect(ecran.find('#annonce-suivi').text()).toBe('Carte recentrée : la carte vous suit.')
       ecran.unmount()
     })
@@ -474,7 +474,7 @@ describe('Carte du trajet', () => {
         await ecran.setProps({ trace, depart: lyon, arrivee: vienne })
         const [centreDemande, zoom] = vi.mocked(Leaflet.Map.prototype.setView).mock.lastCall!
         // Au zoom du suivi, centré un peu devant la voiture (à moins de 200 m) : pas le trajet entier.
-        expect(zoom).toBe(19)
+        expect(zoom).toBe(20)
         const centre = Leaflet.latLng(centreDemande)
         expect(
           distanceEntre(
@@ -641,7 +641,7 @@ describe('Carte du trajet', () => {
         expect(ecran.find('#carte-trajet').attributes('aria-label')).toBe(
           'Carte du trajet de Lyon à Vienne',
         )
-        expect(carteAffichee!.getZoom()).toBe(19)
+        expect(carteAffichee!.getZoom()).toBe(20)
         expect(boutonNomme(ecran, 'Me recentrer sur ma position')).toBeUndefined()
         ecran.unmount()
       })
