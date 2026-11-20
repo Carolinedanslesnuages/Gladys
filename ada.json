@@ -1,6 +1,6 @@
 {
   "type": "mobile",
-  "dsfr": false,
+  "edition": "studio",
   "personnaliser": [
     "PROJET.md",
     "README.md",
