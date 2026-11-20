@@ -38,10 +38,12 @@ describe('Demande #33 : apparence propre à GLADYS, sans DSFR', () => {
     expect(valeurDeLaCouleur('vert-route').toLowerCase()).toBe('#1f7a4d')
   })
 
-  it('le DSFR n’est plus une dépendance et ada.json le dit', () => {
+  it('le DSFR n’est plus une dépendance ; projet d’ADA studio, sans apparence imposée', () => {
     const dependances = JSON.parse(readFileSync('package.json', 'utf8')).dependencies as Record<string, string>
     expect(Object.keys(dependances).filter((nom) => /dsfr/i.test(nom))).toEqual([])
-    expect(JSON.parse(readFileSync('ada.json', 'utf8')).dsfr).toBe(false)
+    const ada = JSON.parse(readFileSync('ada.json', 'utf8'))
+    expect(ada.edition).toBe('studio')
+    expect(ada.dsfr).toBeUndefined()
   })
 
   it('aucun fichier du code n’utilise un composant, une classe fr-… ou la police du DSFR', () => {
